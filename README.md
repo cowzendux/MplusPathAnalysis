@@ -1,6 +1,6 @@
 #MplusPathAnalysis
 
-Use Mplus to run a Path Analysis from within SPSS
+SPSS Python Extension function to use Mplus to run a path analysis from within SPSS
 
 This program allows users to identify a path model that they want to test on an SPSS data set. The program then converts the active data set to Mplus format, writes a program that will perform the path analysis in Mplus, then loads the important parts of the Mplus output into the SPSS output window.
 
