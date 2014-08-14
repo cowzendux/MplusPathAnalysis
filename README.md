@@ -28,7 +28,7 @@ This and other SPSS Python Extension functions can be found at http://www.stat-h
 **MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",  
 model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender"] ],  
 cluster = "school")**
-* This would test a regression model where a Treatment (Tx) is expected to affect attitudes towrd children (att_ch). Years of experience teaching (yrs_tch), teacher age (age), and teacher gender (gender) are included as covariates.  
+* This would test a model where attitudes towrd children (att_ch) is predicted by Treatment (Tx), Years of experience teaching (yrs_tch), teacher age (age), and teacher gender (gender).
 * All of the exogenous variables (which include Tx, att_ch, yrs_tch, age, and gender) are allowed to freely covary. This is not specified explicitly, but is the default.
 * The model controls for school as a random clustering factor. 
 
