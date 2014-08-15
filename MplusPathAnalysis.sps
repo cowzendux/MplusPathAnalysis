@@ -7,9 +7,10 @@
 * that will perform the path analysis in Mplus, then loads the important
 * parts of the Mplus output into the SPSS output window.
 
-**** Usage: MplusPathAnalysis(impfile, model, corrEndo, corrExo, 
-covar, categorical, censored, count, nominal, cluster, weight, 
-datasetName, datasetLabels, waittime)
+**** Usage: MplusPathAnalysis(impfile, model, covar, corrEndo, corrExo, 
+usevariables, indirect, identifiers, wald,
+categorical, censored, count, nominal, cluster, weight, 
+datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 **** "impfile" is a string identifying the directory and filename of
 * Mplus input file to be created by the program. This filename must end with
 * .inp . The data file will automatically be saved to the same directory. This
@@ -47,6 +48,29 @@ datasetName, datasetLabels, waittime)
 * will not, although you can still specify individual covariances between 
 * exogenous variables using the "covar" argument described above.
 * By default, the value for corrExo is True.
+**** "useobservations" is a string specifying a selection
+* criteriion that must be met for observations to be included in the 
+* analysis. This is an optional argument that defaults to None, indicating
+* that all observations are to be included in the analysis.
+**** "indirect" is an optional argument that identifies a set of indirect effects
+* that should be tested within the specified model. The argument is provided
+* as a list of lists. Each individual list identifies a single indirect effect that
+* should be tested. Within each list, the outcome is listed first and the 
+* predictor is listed last. If you want to test specific indirect paths, the variables
+* in the path are listed following the outcome but before the predictor. 
+* This argument defaults to None, which would indicate that 
+* you do not want to test indirect effects.
+**** "identifiers" is an optional argument provides a list of lists pairing 
+* coefficients with identifiers that will be used as part of a Wald Z test. The 
+* coefficients part must specifically match an entry in the model statement.
+* This defaults to None, which does not assign any identifiers. 
+**** "wald" is an optional argument that identifies a list of constraints that
+* will be tested using a Wald Z test. The constraints will be definted using the
+* identifiers specified in the "identifiers" argument. This can be used 
+* to create an omnibus test that several coefficients are equal to zero, or it 
+* can be used to test the equivalence of different coefficients. This argument 
+* defaults to None, which would indicate that you do not want to perform 
+* a Wald Z test.
 **** "categorical" is an optional argument that identifies a list of variables
 * that should be treated as categorical by Mplus. Note that what Mplus
 * calls categorical is typically called "ordinal" in other places. Use the
@@ -70,10 +94,13 @@ datasetName, datasetLabels, waittime)
 * indicate that there are no auxiliary variables in the analysis.
 **** "datasetName" is an optional argument that identifies the name of
 * an SPSS dataset that should be used to record the coefficients.
-**** "datasetLabel" is an optional argument that identifies a list of
-* labels that would be applied to the dataset containing coefficients.
-* This can be useful if you are appending the results from multiple analyses 
-* to the same dataset.
+**** "indDatasetName" is an optional argument that identifies the name of
+* an SPSS dataset that should be used to record the tests of the indirect
+* effects. This will do nothing if no indirect tests are defined.
+**** "datasetLabels" is an optional argument that identifies a list of
+* labels that would be applied to the datasets containing coefficients or
+* tests of the indirect effects. This can be useful if you are appending 
+* the results from multiple analyses to the same dataset.
 **** "waittime" is an optional argument that specifies how many seconds
 * the program should wait after running the Mplus program before it 
 * tries to read the output file. This defaults to 5. You should be sure that
@@ -84,11 +111,22 @@ datasetName, datasetLabels, waittime)
 MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",
 model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender"], 
 ["CO", "Tx", "att_ch", "yrs_tch", "age", "gender"],
+["CO", "Educ"],
 ["ES", "Tx", "att_ch", "yrs_tch", "age", "gender"],
-["IS", "Tx", "att_ch", "yrs_tch", "age", "gender"] ],
+["ES", "Educ"],
+["IS", "Tx", "att_ch", "yrs_tch", "age", "gender"] 
+["IS", "Educ"] ],
 covar = [ ["CO","ES"], ["CO", "IS"] ],
 corrEndo = False,
 corrExo = True,
+useobservations = "p2cond==1",
+indirect = [ ["CO", "att_ch", "Tx"],
+["ES", "att_ch", "Tx"],
+["IS", "att_ch", "Tx"] ],
+identifiers = [ [ ["CO", "Educ"], "b1"],
+[ ["ES", "Educ"], "b2"],
+[ ["IS", "Educ"], "b3"] ],
+wald = [ "b1 = 0", "b2 = 0", "b3 = 0" ],
 categorical = ["yrs_tch"],
 censored = None,
 count = None,
@@ -96,34 +134,41 @@ nominal = ["Tx", "gender"],
 cluster = "school",
 weight = "demoweight",
 auxiliary = ["grade", "FRLper"],
-bDataset = None,
-betaDataset = "CLASSbeta",
-datasetLabel = ["CLASS", "Mediation"]
+datasetName = "CLASS",
+indDatasetName = "CLASSind",
+datasetLabels = ["CLASS", "Mediation"]
 waittime = 10)
 * This would test a model where a Treatment (Tx) is expected to affect 
 * attitudes towrd children (att_ch), which in turn is related to be related
 * to three measures assessing classroom interactions (CO, ES, and IS).
 * Years of experience teaching (yrs_tch), teacher age (age), and teacher
 * gender (gender) are included as covariates in all of the models. 
-* Treatment is included as a covariate in the models predicting classroomo
+* Treatment is included as a covariate in the models predicting classroom
 * interactions so that the model can be used to accurately estimate the
 * mediated effect. CO is allowed to covary with both ES and IS.
 * The endogenous variables (which include CO, ES, and IS) are not
 * automatically allowed to covary, although two specific covariances
 * are allowed (CO with ES and CO with IS) as mentioned above. All of the 
 * exogenous variables (which include Tx, att_ch, yrs_tch, age, and gender) 
-* are allowed to freely covary. Yrs_tch is treated as a categorical variable, 
+* are allowed to freely covary. The analysis will only include observations 
+* where the value of pcond is 1. The program will test the indirect effects 
+* of Tx on each of the three outcomes (CO, ES, IS) through att_ch.
+* The model will use a Wald Z test to perform an omnibus test that the 
+* Educ does not have any influence on any of the three outcomes (CO, ES, IS).
+* Yrs_tch is treated as a categorical variable, 
 * whereas Tx and gender are treated as nominal variables. 
 * The model also controls for school as a random 
 * clustering factor. The analysis weights the observations using the 
 * values in the variable "demoweight." The variables "grade" and "FRLper"
 * will be used to help estimate missing values but will not be included in
-* the analytic model. The standardized regression coefficients will be
-* recorded in the SPSS dataset "CLASSbeta". This dataset would have 
+* the analytic model. 
+* The regression coefficients will be recorded in the SPSS dataset "CLASS",
+* and the tests of indirect effects will be recorded in the SPSS dataset
+* "CLASSind". Each of these datasets will have 
 * two variables containing labels. All of the results from this run of the 
 * program would have the values of "CLASS" and "Mediation" for these
 * two variables. The program will wait 10 seconds after starting to 
-*run the Mplus program before it tries  to read the results back into SPSS.
+* run the Mplus program before it tries  to read the results back into SPSS.
 
 ************
 * Version History
@@ -163,6 +208,12 @@ categorical, censored, count, nominal
 * 2014-03-29 Changed coefficient variable types to f8.3
 * 2014-05-15 Changed default for datasetLabels to []
 * 2014-05-27 Corrected error when corrExo = False
+* 2014-06-22 Added option to perform indirect tests
+* 2014-06-23 Replaced headers in indirect section
+* 2014-06-23a to 2014-06-24 Added option to save indirect tests to a dataset
+* 2014-07-09 Added option for Wald Z omnibus test
+* 2014-08-15 Added useobservations argument
+    No longer prints auxiliary code when argument omitted
 
 set printback = off.
 begin program python.
@@ -378,7 +429,7 @@ class MplusPAprogram:
         splitName = MplusSplit(filename, 75)
         self.data += "'" + splitName + "';"
 
-    def setVariable(self, fullList, model, categorical, censored, count,
+    def setVariable(self, fullList, model, useobservations, categorical, censored, count,
 nominal, cluster, weight, auxiliary):
         self.variable += "Names are\n"
         for var in fullList:
@@ -396,11 +447,13 @@ nominal, cluster, weight, auxiliary):
             self.variable += var + "\n"
 
 # Other variable additions
+        if (useobservations != None):
+            self.variable += ";\n\nuseobservations are " + useobservations
         if (cluster != None):
             self.variable += ";\n\ncluster is " + cluster
         if (weight != None):
             self.variable += ";\n\nweight is " + weight
-        if (auxiliary != None):
+        if (auxiliary != []):
             self.variable += ";\n\nauxiliary = (m) " 
             for var in auxiliary:
                 self.variable += var + "\n"
@@ -418,7 +471,8 @@ nominal, cluster, weight, auxiliary):
         if (cluster != None):
             self.analysis += "type = complex;"
 
-    def setModel(self, MplusModel, MplusCovar, cEndo, cExo):
+    def setModel(self, MplusModel, MplusCovar, cEndo, cExo, MplusIndirect, 
+MplusIdentifiers, wald):
 # Regression equations
         for equation in MplusModel:
             curline = equation[0] + " on"
@@ -428,12 +482,17 @@ nominal, cluster, weight, auxiliary):
                     else:
                         self.model += curline + "\n"
                         curline = var
+            if (MplusIdentifiers != None):
+                for id in MplusIdentifiers:
+                    if (equation == id[0]):
+                        curline += " (" + id[1] + ")"
             self.model += curline + ";\n"
 
 # Getting lists of endogenous and exogenous variables
         endo = []
         for equation in MplusModel:
             endo.append(equation[0])
+        endo = list(set(endo))
         exo = []
         for equation in MplusModel:
             for var in equation:
@@ -480,6 +539,25 @@ nominal, cluster, weight, auxiliary):
                             self.model += curline + "\n"
                             curline = var
                     self.model += curline + ";"
+
+# Indirect effect tests
+        if (MplusIndirect != None):
+            self.model += "\n\nMODEL INDIRECT:"
+            for t in MplusIndirect:
+                if (len(t) == 2):
+                    line = t[0] + " ind " + t[1] + ";"
+                if (len(t) > 2):
+                    line = t[0] + " via"                    
+                    for i in t[1:]:
+                        line += " " + i
+                    line += ";"
+                self.model += "\n" + line
+
+# Wald test
+        if (MplusIdentifiers != None and wald != None):
+            self.model += "\n\nMODEL TEST:"
+            for line in wald:
+                self.model += "\n" + line + ";"
 
     def setOutput(self, outputText):
         self.output += outputText
@@ -533,6 +611,56 @@ def getCoefficients(outputBlock):
                     coefficients.append(line)
     return coefficients
 
+def getIndirect(outputBlock):
+    outputBlock2 = outputBlock.replace("\r", "")
+    blockList = outputBlock2.split("\n")
+    coefficients = []
+    for t in range(len(blockList)):
+            values1 = blockList[t].split(" ")
+            values2 = []
+            for i in values1:
+                if (i != ""):
+                    values2.append(i)
+
+            if ("Effects from") in blockList[t]:
+                effect = " ".join(values2[2:])
+            if ("Total" in values2):
+                if (values2[1] == "indirect"):
+                    line = [effect, "Total indirect", 0]
+                    for j in values2[2:]:
+                        line.append(float(j))
+                    coefficients.append(line)
+                else:
+                    line = [effect, "Total", 0]
+                    for j in values2[1:]:
+                        line.append(float(j))
+                    coefficients.append(line)
+            if ("Specific indirect") in blockList[t]:
+                specific = 1
+                path = ""
+                while (t < len(blockList)-1):
+                    t += 1
+                    if ("Effects from" in blockList[t]):
+                        t += -1
+                        break
+                    values1 = blockList[t].split(" ")
+                    values2 = []
+                    for i in values1:
+                       if (i != ""):
+                           values2.append(i)
+                    if (len(values2) == 1):
+                        if (values2[0] == "Direct"):
+                            specific = 0
+                        path += values2[0] + " "
+                    if (len(values2) > 1):
+                        path += values2[0]
+                        line = [effect, path, specific]
+                        path = ""
+                        for j in values2[1:]:
+                            line.append(float(j))
+                        coefficients.append(line)
+    return coefficients
+
 class MplusPAoutput:
     def __init__(self, filename, Mplus, SPSS):
         infile = open(filename, "rb")
@@ -550,6 +678,8 @@ class MplusPAoutput:
         self.Zcovariances = None
         self.Zdescriptives = None
         self.r2 = None
+        self.indirect = None
+        self.Zindirect = None
         self.mi = None
 
 # Summary
@@ -658,17 +788,44 @@ re.search(r"\bMeans\b", outputList[t])):
             self.r2 = "\n".join(outputList[start:end])
             self.r2 = removeBlanks(self.r2)
 
+# Indirect effects
+            stest = 0
+            for t in range(end, len(outputList)):
+                if ("INDIRECT" in outputList[t]):
+                    start = t
+                    stest = 1
+                    break
+            if (stest == 1):
+                for t in range(start, len(outputList)):
+                    if ("STANDARDIZED TOTAL" in outputList[t]):
+                        end = t-1
+                        break        
+                self.indirect = "\n".join(outputList[start:end])
+                self.indirect = removeBlanks(self.indirect)
+                start = end
+                for t in range(start, len(outputList)):
+                    if ("Beginning Time" in outputList[t] 
+or "TECHNICAL" in outputList[t]
+or "MODIFICATION" in outputList[t]):
+                        end = t-1
+                        break
+                self.Zindirect = "\n".join(outputList[start:end])
+                self.Zindirect = removeBlanks(self.Zindirect)
+    
 # Modification indices
             for t in range(end, len(outputList)):
+                stest = 0
                 if ("MODEL MODIFICATION INDICES" in outputList[t]):
                     start = t
+                    mitest = 1
                     break
-            for t in range(start, len(outputList)):
-                if ("Beginning Time" in outputList[t] or "TECHNICAL" in outputList[t]):
-                    end = t-1
-                    break
-            self.mi = "\n".join(outputList[start:end])
-            self.mi = removeBlanks(self.mi)
+            if (stest == 1):
+                for t in range(start, len(outputList)):
+                    if ("Beginning Time" in outputList[t] or "TECHNICAL" in outputList[t]):
+                        end = t-1
+                        break
+                self.mi = "\n".join(outputList[start:end])
+                self.mi = removeBlanks(self.mi)
 
 # Replacing variable names
 # In the Coefficients section, initially room for 17
@@ -703,6 +860,10 @@ re.search(r"\bMeans\b", outputList[t])):
                 self.Zcovariances = self.Zcovariances.replace(var1.upper(), var2)
             if (self.Zdescriptives != None):
                 self.Zdescriptives = self.Zdescriptives.replace(var1.upper(), var2)
+            if (self.indirect != None):
+                self.indirect = self.indirect.replace(var1.upper(), var2)
+            if (self.Zindirect != None):
+                self.Zindirect = self.Zindirect.replace(var1.upper(), var2)
 
 # Headers
         oldheader = "Two-Tailed"
@@ -711,12 +872,37 @@ re.search(r"\bMeans\b", outputList[t])):
             self.coefficients = self.coefficients.replace(oldheader, newheader)
         if (self.Zcoefficients != None):
             self.Zcoefficients = self.Zcoefficients.replace(oldheader, newheader)
+        if (self.indirect != None):
+            self.indirect = self.indirect.replace(oldheader, newheader)
+        if (self.Zindirect != None):
+            self.Zindirect = self.Zindirect.replace(oldheader, newheader)
+
         oldheader = "Estimate       S.E.  Est./S.E.    P-Value"
         newheader = "               Estimate       S.E.  Est./S.E.    P-Value"""
         if (self.coefficients != None):
             self.coefficients = self.coefficients.replace(oldheader, newheader)
         if (self.Zcoefficients != None):
             self.Zcoefficients = self.Zcoefficients.replace(oldheader, newheader)
+        if (self.indirect != None):
+            self.indirect = self.indirect.replace(oldheader, newheader)
+        if (self.Zindirect != None):
+            self.Zindirect = self.Zindirect.replace(oldheader, newheader)
+
+# Indirect section
+        if (self.indirect != None):
+            self.indirect = self.indirect.replace("Total                ", 
+"Total                              ")
+            self.indirect = self.indirect.replace("Total indirect       ",
+"Total indirect                     ")
+            self.indirect = self.indirect.replace("Sum of indirect      ",
+"Sum of indirect                    ")
+        if (self.Zindirect != None):
+            self.Zindirect = self.Zindirect.replace("Total                ", 
+"Total                              ")
+            self.Zindirect = self.Zindirect.replace("Total indirect       ",
+"Total indirect                     ")
+            self.Zindirect = self.Zindirect.replace("Sum of indirect      ",
+"Sum of indirect                    ")
 
 # MI section
         if (self.mi != None and
@@ -764,19 +950,29 @@ in self.warnings)):
         spss.Submit("title 'UNSTANDARDIZED DESCRIPTIVES'.")
         print self.descriptives
 
-        if ("MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings):
+        if (self.Zcoefficients != None):
             spss.Submit("title 'STANDARDIZED COEFFICIENTS'.")
             print self.Zcoefficients
+        if (self.Zcovariances != None):
             spss.Submit("title 'STANDARDIZED COVARIANCES'.")
             print self.Zcovariances
+        if (self.Zdescriptives != None):
             spss.Submit("title 'STANDARDIZED DESCRIPTIVES'.")
             print self.Zdescriptives
+        if (self.r2 != None):
             spss.Submit("title 'R-SQUARES'.")
             print self.r2
+        if (self.indirect != None):
+            spss.Submit("title 'INDIRECT EFFECTS'.")
+            print self.indirect
+        if (self.Zindirect != None):
+            spss.Submit("title 'STANDARDIZED INDIRECT EFFECTS'.")
+            print self.Zindirect
+        if (self.mi != None):
             spss.Submit("title 'MODIFICATION INDICES'.")
             print self.mi     
 
-# Save to dataset
+# Save coefficients to dataset
     def toSPSSdata(self, datasetName = "MPAcoefs", labelList = []):
 # Determine active data set so we can return to it when finished
         activeName = spss.ActiveDataset()
@@ -846,11 +1042,85 @@ dataset name {1}.""".format(dsetname, datasetName)
         spss.SetActive(datasetObj)
         spss.EndDataStep()
 
+# Save indirect tests to dataset
+    def indirectToSPSSdata(self, datasetName = "MPAindirect", labelList = []):
+# Determine active data set so we can return to it when finished
+        activeName = spss.ActiveDataset()
+# Set up data set if it doesn't already exist
+        tag,err = spssaux.createXmlOutput('Dataset Display',
+omsid='Dataset Display', subtype='Datasets')
+        datasetList = spssaux.getValuesFromXmlWorkspace(tag, 'Datasets')
+
+        if (datasetName not in datasetList):
+            spss.StartDataStep()
+            datasetObj = spss.Dataset(name=None)
+            dsetname = datasetObj.name
+            datasetObj.varlist.append("IndirectTest", 200)
+            datasetObj.varlist.append("Path", 200)
+            datasetObj.varlist.append("SpecificEffect", 0)
+            datasetObj.varlist.append("b_Coefficient", 0)
+            datasetObj.varlist.append("b_SE", 0)
+            datasetObj.varlist.append("b_Ratio", 0)
+            datasetObj.varlist.append("b_p", 0)
+            datasetObj.varlist.append("beta_Coefficient", 0)
+            datasetObj.varlist.append("beta_SE", 0)
+            datasetObj.varlist.append("beta_Ratio", 0)
+            datasetObj.varlist.append("beta_p", 0)
+            spss.EndDataStep()
+            submitstring = """dataset activate {0}.
+dataset name {1}.""".format(dsetname, datasetName)
+            spss.Submit(submitstring)
+
+        spss.StartDataStep()
+        datasetObj = spss.Dataset(name = datasetName)
+        spss.SetActive(datasetObj)
+
+# Label variables
+        variableList =[]
+        for t in range(spss.GetVariableCount()):
+            variableList.append(spss.GetVariableName(t))
+        for t in range(len(labelList)):
+            if ("label{0}".format(str(t)) not in variableList):
+                datasetObj.varlist.append("label{0}".format(str(t)), 50)
+        spss.EndDataStep()
+
+# Set types for numeric vars
+        submitstring = """alter type b_Coefficient to beta_p (f8.3).
+alter type SpecificEffect (f8.0)."""
+        spss.Submit(submitstring)
+
+# Get coefficients
+        bCoef = getIndirect(self.indirect)
+        zCoef = getIndirect(self.Zindirect)
+
+# Determine values for dataset
+        dataValues = []
+        for t in range(len(bCoef)):
+            rowList = bCoef[t]
+            rowList.extend(zCoef[t][3:])
+            rowList.extend(labelList)
+            dataValues.append(rowList)
+
+# Put values in dataset
+        spss.StartDataStep()
+        datasetObj = spss.Dataset(name = datasetName)
+        for t in dataValues:
+            datasetObj.cases.append(t)
+        spss.EndDataStep()
+
+# Return to original data set
+        spss.StartDataStep()
+        datasetObj = spss.Dataset(name = activeName)
+        spss.SetActive(datasetObj)
+        spss.EndDataStep()
+
 def MplusPathAnalysis(inpfile, model, covar = None, 
-corrEndo = False, corrExo = True,
+corrEndo = False, corrExo = True, 
+useobservations = None, indirect = None, identifiers = None, wald = None,
 categorical = None, censored = None, count = None, nominal = None,
 cluster = None, weight = None, auxiliary = None, 
-datasetName = None, datasetLabels = [], waittime = 5):
+datasetName = None, indDatasetName = None, datasetLabels = [], 
+waittime = 5):
 
 # Find directory and filename
     for t in range(len(inpfile)):
@@ -882,14 +1152,7 @@ datasetName = None, datasetLabels = [], waittime = 5):
     if (variableError == 1):
         print("Error: Variable listed in model not in current data set")
         error = 1
-    outcomes = []
-    for equation in model:
-        if (equation[0].upper() in outcomes):
-            print("Error: Same variable used as outcome in multiple equations")
-            error = 1
-        else:
-            outcomes.append(equation[0].upper())
-
+    
     if (error == 0):
 # Export data
         dataname = outdir + fname + ".dat"
@@ -917,6 +1180,46 @@ datasetName = None, datasetLabels = [], waittime = 5):
                     for s, m in zip(SPSSvariablesCaps, MplusVariables):
                         if (MplusCovar[t][i] == s):
                             MplusCovar[t][i] = m
+
+# Define indirect effects using Mplus variables
+        if (indirect == None):
+            MplusIndirect = None
+        else:
+            MplusIndirect = []
+            for t in indirect:
+                MplusIndirect.append([i.upper() for i in t])
+            for t in range(len(MplusIndirect)):
+                for i in range(len(MplusIndirect[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (MplusIndirect[t][i] == s):
+                            MplusIndirect[t][i] = m
+
+# Convert identifiers to Mplus
+        if (identifiers == None):
+            MplusIdentifiers = None
+        else:
+            MplusIdentifiers = []
+            idEquations = []
+            for t in identifiers:
+                j = []
+                for i in t[0]:
+                    j.append(i.upper())
+                idEquations.append(j)
+            for t in range(len(idEquations)):
+                for i in range(len(idEquations[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (idEquations[t][i] == s):
+                            idEquations[t][i] = m
+                MplusIdentifiers.append([idEquations[t], identifiers[t][1]])
+
+# Convert useobservations to Mplus
+        if (useobservations == None):
+            MplusUseobservations = None
+        else:
+            MplusUseobservations = useobservations
+            for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                z = re.compile(s, re.IGNORECASE)
+                MplusUseobservations = z.sub(m, MplusUseobservations)
 
 # Convert cluster variable to Mplus
         if (cluster == None):
@@ -958,11 +1261,13 @@ MplusCount, MplusNominal]
         pathProgram = MplusPAprogram()
         pathProgram.setTitle("Created by MplusPathAnalysis")
         pathProgram.setData(dataname)
-        pathProgram.setVariable(MplusVariables, MplusModel, 
+        print MplusAuxiliary
+        pathProgram.setVariable(MplusVariables, MplusModel, MplusUseobservations,
 MplusCategorical, MplusCensored, MplusCount, MplusNominal,
 MplusCluster, MplusWeight, MplusAuxiliary)
         pathProgram.setAnalysis(MplusCluster)
-        pathProgram.setModel(MplusModel, MplusCovar, corrEndo, corrExo)
+        pathProgram.setModel(MplusModel, MplusCovar, corrEndo, corrExo, 
+MplusIndirect, MplusIdentifiers, wald)
         pathProgram.setOutput("stdyx;\nmodindices;")
         pathProgram.write(outdir + fname + ".inp")
 
@@ -979,6 +1284,11 @@ MplusVariables, SPSSvariables)
         if (datasetName != None):
             pathOutput.toSPSSdata(datasetName, datasetLabels)
 
+# Create indirect effects dataset
+        print indDatasetName
+        if (indDatasetName != None):
+            pathOutput.indirectToSPSSdata(indDatasetName, datasetLabels)
+
 end program python.
 set printback = on.
-COMMENT BOOKMARK;LINE_NUM=535;ID=1.
+COMMENT BOOKMARK;LINE_NUM=1116;ID=2.
