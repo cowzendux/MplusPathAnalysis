@@ -7,7 +7,7 @@
 * that will perform the path analysis in Mplus, then loads the important
 * parts of the Mplus output into the SPSS output window.
 
-**** Usage: MplusPathAnalysis(impfile, latent, model, covar, corrEndo, corrExo, 
+**** Usage: MplusPathAnalysis(impfile, latent, model, covar, covEndo, covExo, 
 useobservations, indirect, identifiers, wald,
 categorical, censored, count, nominal, cluster, weight, 
 datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
@@ -28,16 +28,14 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * Then you combine these individual equation lists 
 * into a larger list identifying the entire path model. You can omit this argument
 * if you are performing a CFA and don't have any structural equations.
-**** "covar" is a list of lists identifying covariances with 
-* endogenous variables. All exogenous variables are automatically 
-* allowed to covary with each other, but covariances of exogenous 
-* variables with endogenous variables as well as covariances 
-* among endogenous variables must be specified. First, you create
-* a set of lists that identify pairs of variables that are allowed to covary.
-* Then you combine these lists of pairs into a single, overall list. 
-* This argument defaults to None, which would indicate that there are 
-* no extra covariances allowed with endogenous variables.
-**** "corrEndo" is a boolean variable that indicates whether you want
+**** "covar" is a list of lists identifying covariances with endogenous variables. 
+* First, you create a set of lists that identify pairs of variables that are allowed 
+* to covary. Then you combine these lists of pairs into a single, overall list. 
+* This argument defaults to None, which would indicate that you are not 
+* explicitly identifying covariances among the variables. However, your 
+* choices for the "covEndo" and the "covExo" arguments may allow additional 
+* covariances.
+**** "covEndo" is a boolean variable that indicates whether you want
 * to automatically correlated all of the endogenous variables in the model.
 * Endogenous variables are those that are used as an outcome at least
 * once in your model. If this variable is set to True, then the program will
@@ -45,8 +43,8 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * variables. If this variable is set to False, then it will not, although
 * you can still specify individual covariances between endogenous
 * variables using the "covar" argument described above. By default, 
-* the value of corrEndo is False.
-**** "corrExo" is a boolean variable that indicates whether you want
+* the value of covEndo is False.
+**** "covExo" is a boolean variable that indicates whether you want
 * to automatically correlated all of the exogenous variables in the model.
 * Exogenous variables are those that are only used as predictors and
 * never used as outcomes in your model. If this variable is set to True, 
@@ -54,7 +52,7 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * of the exogenous variables. If this variable is set to False, then it 
 * will not, although you can still specify individual covariances between 
 * exogenous variables using the "covar" argument described above.
-* By default, the value for corrExo is True.
+* By default, the value for covExo is True.
 **** "useobservations" is a string specifying a selection
 * criteriion that must be met for observations to be included in the 
 * analysis. This is an optional argument that defaults to None, indicating
@@ -69,8 +67,9 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * you do not want to test indirect effects.
 **** "identifiers" is an optional argument provides a list of lists pairing 
 * coefficients with identifiers that will be used as part of a Wald Z test. The 
-* coefficients part must specifically match an entry in the model statement.
-* This defaults to None, which does not assign any identifiers. 
+* coefficients part must specifically match a list in the "model" statement.
+* To do this, you may need to separate the predictors for a single outcome 
+* into different lists. This defaults to None, which does not assign any identifiers. 
 **** "wald" is an optional argument that identifies a list of constraints that
 * will be tested using a Wald Z test. The constraints will be definted using the
 * identifiers specified in the "identifiers" argument. This can be used 
@@ -125,8 +124,8 @@ model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender"],
 ["IS", "Tx", "att_ch", "yrs_tch", "age", "gender"] 
 ["IS", "Educ"] ],
 covar = [ ["CO","ES"], ["CO", "IS"] ],
-corrEndo = False,
-corrExo = True,
+covEndo = False,
+covExo = True,
 useobservations = "p2cond==1",
 indirect = [ ["CO", "att_ch", "Tx"],
 ["ES", "att_ch", "Tx"],
@@ -202,7 +201,7 @@ after exporting the data set to Mplus
 * 2013-12-31 Separated coefficients, covariances, and 
     descriptives in output
 * 2014-01-02 Added weight parameter
-* 2014-01-06 Added corrEndo and corrExo parameters
+* 2014-01-06 Added covEndo and covExo parameters
 * 2014-01-07 Reloaded original data file after analysis
 * 2014-01-26 Added auxiliary parameter
 * 2014-01-29 Removed extra ;
@@ -215,7 +214,7 @@ categorical, censored, count, nominal
 * 2014-03-27 Added options to save coefficients in a dataset
 * 2014-03-29 Changed coefficient variable types to f8.3
 * 2014-05-15 Changed default for datasetLabels to []
-* 2014-05-27 Corrected error when corrExo = False
+* 2014-05-27 Corrected error when covExo = False
 * 2014-06-22 Added option to perform indirect tests
 * 2014-06-23 Replaced headers in indirect section
 * 2014-06-23a to 2014-06-24 Added option to save indirect tests to a dataset
@@ -224,6 +223,8 @@ categorical, censored, count, nominal
     No longer prints auxiliary code when argument omitted
 * 2014-08-18 Added support for latent variables
 * 2014-08-19 Finished implementation of latent variables
+* 2014-08-19a Renamed covEndo and covExo arguments
+    Fixed documentation
 
 set printback = off.
 begin program python.
@@ -1218,7 +1219,7 @@ alter type SpecificEffect (f8.0)."""
         spss.EndDataStep()
 
 def MplusPathAnalysis(inpfile, latent = None, model = None, covar = None, 
-corrEndo = False, corrExo = True, 
+covEndo = False, covExo = True, 
 useobservations = None, indirect = None, identifiers = None, wald = None,
 categorical = None, censored = None, count = None, nominal = None,
 cluster = None, weight = None, auxiliary = None, 
@@ -1399,7 +1400,7 @@ MplusCategorical, MplusCensored, MplusCount, MplusNominal,
 MplusCluster, MplusWeight, MplusAuxiliary)
         pathProgram.setAnalysis(MplusCluster)
         pathProgram.setModel(MplusLatent, MplusModel, MplusCovar, 
-corrEndo, corrExo, MplusIndirect, MplusIdentifiers, wald)
+covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
         pathProgram.setOutput("stdyx;\nmodindices;")
         pathProgram.write(outdir + fname + ".inp")
 
