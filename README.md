@@ -7,9 +7,10 @@ This program allows users to identify a path model that they want to test on an 
 This and other SPSS Python Extension functions can be found at http://www.stat-help.com/python.html
 
 ##Usage
-**MplusPathAnalysis(impfile, model, covar, corrEndo, corrExo, usevariables, indirect, identifiers, wald, categorical, censored, count, nominal, cluster, weight, datasetName, datasetLabels, indDatasetName, waittime)**
+**MplusPathAnalysis(impfile, latent, model, covar, corrEndo, corrExo, usevariables, indirect, identifiers, wald, categorical, censored, count, nominal, cluster, weight, datasetName, datasetLabels, indDatasetName, waittime)**
 * "impfile" is a string identifying the directory and filename of Mplus input file to be created by the program. This filename must end with .inp . The data file will automatically be saved to the same directory. This argument is required.
-* "model" is a list of lists identifying the equations in your path model.  First, you create a set of lists that each have the outcome as the first element and then have the predictors as the following elements. Then you combine these individual equation lists into a larger list identifying the entire path model. This argument is required.
+* "latent" is a list of lists identifying the relations between observed and latent variables. This argument is optional, and can be omitted if your model does not have any latent variables. When creating this argument, you first create a list of strings for each latent variable where the first element is the name of the latent variable and the remaining elements are the names of the observed variables that load on that latent variable. You then combine these individual latent variable lists into a larger list identifying the full measurement model.
+* "model" is a list of lists identifying the equations in your path model.  First, you create a set of lists that each have the outcome as the first element and then have the predictors as the following elements. Then you combine these individual equation lists into a larger list identifying the entire path model. 
 * "covar" is a list of lists identifying covariances with endogenous variables. All exogenous variables are automatically allowed to covary with each other, but covariances of exogenous variables with endogenous variables as well as covariances among endogenous variables must be specified. First, you create a set of lists that identify pairs of variables that are allowed to covary. Then you combine these lists of pairs into a single, overall list. This argument defaults to None, which would indicate that there are no extra covariances allowed with endogenous variables.
 * "corrEndo" is a boolean variable that indicates whether you want to automatically correlated all of the endogenous variables in the model. Endogenous variables are those that are used as an outcome at least once in your model. If this variable is set to True, then the program will automatically include covariances among all of the endogenous variables. If this variable is set to False, then it will not, although you can still specify individual covariances between endogenous variables using the "covar" argument described above. By default, the value of corrEndo is False.
 * "corrExo" is a boolean variable that indicates whether you want to automatically correlated all of the exogenous variables in the model. Exogenous variables are those that are only used as predictors and never used as outcomes in your model. If this variable is set to True, then the program will automatically include covariances among all of the exogenous variables. If this variable is set to False, then it will not, although you can still specify individual covariances between exogenous variables using the "covar" argument described above. By default, the value for corrExo is True.
@@ -39,10 +40,11 @@ cluster = "school")**
 
 ##Example 2 - Full specification
 **MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",  
-model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender"],   
-&nbsp;&nbsp;&nbsp;&nbsp;["CO", "Tx", "att_ch", "yrs_tch", "age", "gender"],  
-&nbsp;&nbsp;&nbsp;&nbsp;["ES", "Tx", "att_ch", "yrs_tch", "age", "gender"],  
-&nbsp;&nbsp;&nbsp;&nbsp;["IS", "Tx", "att_ch", "yrs_tch", "age", "gender"] ],  
+latent = [ ["CHLATENT", "chincome_mean", "chfrl_mean", "chmomed_mean"] ],  
+model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender", "CHLATENT"],   
+&nbsp;&nbsp;&nbsp;&nbsp;["CO", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"],  
+&nbsp;&nbsp;&nbsp;&nbsp;["ES", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"],  
+&nbsp;&nbsp;&nbsp;&nbsp;["IS", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"] ],  
 covar = [ ["CO","ES"], ["CO", "IS"] ],  
 corrEndo = False,  
 corrExo = True,  
@@ -66,6 +68,7 @@ indDatasetName = "CLASSind",
 datasetLabels = ["CLASS", "Mediation"]  
 waittime = 10)**
 * This would test a model where a Treatment (Tx) is expected to affect attitudes towrd children (att_ch), which in turn is related to be related to three measures assessing classroom interactions (CO, ES, and IS). Years of experience teaching (yrs_tch), teacher age (age), and teacher gender (gender) are included as covariates in all of the models.  Treatment is included as a covariate in the models predicting classroom interactions so that the model can be used to accurately estimate the mediated effect. 
+* A latent variable "CHLATENT" is created to represent the characteristics of the children in the classroom, based on child income (chincome_mean), child free and reduced lunch status (chfrl_mean), and mother education (chmomed_mean).
 * CO is allowed to covary with both ES and IS. 
 * The endogenous variables (which include CO, ES, and IS) are not automatically allowed to covary, although two specific covariances are allowed (CO with ES and CO with IS) as mentioned above. 
 * All of the exogenous variables (which include Tx, att_ch, yrs_tch, age, and gender) are allowed to freely covary.
