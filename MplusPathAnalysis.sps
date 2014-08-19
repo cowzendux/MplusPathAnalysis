@@ -7,20 +7,27 @@
 * that will perform the path analysis in Mplus, then loads the important
 * parts of the Mplus output into the SPSS output window.
 
-**** Usage: MplusPathAnalysis(impfile, model, covar, corrEndo, corrExo, 
-usevariables, indirect, identifiers, wald,
+**** Usage: MplusPathAnalysis(impfile, latent, model, covar, corrEndo, corrExo, 
+useobservations, indirect, identifiers, wald,
 categorical, censored, count, nominal, cluster, weight, 
 datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 **** "impfile" is a string identifying the directory and filename of
 * Mplus input file to be created by the program. This filename must end with
 * .inp . The data file will automatically be saved to the same directory. This
 * argument is required.
+**** "latent" is a list of lists identifying the relations between observed and latent 
+* variables. This argument is optional, and can be omitted if your model does
+* not have any latent variables. When creating this argument, you first create a
+* list of strings for each latent variable where the first element is the name of
+* the latent variable and the remaining elements are the names of the observed
+* variables that load on that latent variable. You then combine these individual
+* latent variable lists into a larger list identifying the full measurement model.
 **** "model" is a list of lists identifying the equations in your
 * path model.  First, you create a set of lists that each have the outcome as
 * the first element and then have the predictors as the following elements.
 * Then you combine these individual equation lists 
-* into a larger list identifying the entire path model. This argument 
-* is required.
+* into a larger list identifying the entire path model. You can omit this argument
+* if you are performing a CFA and don't have any structural equations.
 **** "covar" is a list of lists identifying covariances with 
 * endogenous variables. All exogenous variables are automatically 
 * allowed to covary with each other, but covariances of exogenous 
@@ -109,6 +116,7 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 
 * Example: 
 MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",
+latent = 
 model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender"], 
 ["CO", "Tx", "att_ch", "yrs_tch", "age", "gender"],
 ["CO", "Educ"],
@@ -214,6 +222,8 @@ categorical, censored, count, nominal
 * 2014-07-09 Added option for Wald Z omnibus test
 * 2014-08-15 Added useobservations argument
     No longer prints auxiliary code when argument omitted
+* 2014-08-18 Added support for latent variables
+* 2014-08-19 Finished implementation of latent variables
 
 set printback = off.
 begin program python.
@@ -429,8 +439,8 @@ class MplusPAprogram:
         splitName = MplusSplit(filename, 75)
         self.data += "'" + splitName + "';"
 
-    def setVariable(self, fullList, model, useobservations, categorical, censored, count,
-nominal, cluster, weight, auxiliary):
+    def setVariable(self, fullList, latent, model, useobservations, 
+categorical, censored, count, nominal, cluster, weight, auxiliary):
         self.variable += "Names are\n"
         for var in fullList:
             self.variable += var + "\n"
@@ -438,10 +448,18 @@ nominal, cluster, weight, auxiliary):
 
 # Determine usevariables
         useList = []
-        for equation in model:
-            for var in equation:
-                if (var not in useList):
-                    useList.append(var)
+        latentName = []
+        if (latent != None):
+            for equation in latent:
+                latentName.append(equation[0])
+                for var in equation[1:]:
+                    if (var not in useList):
+                        useList.append(var)
+        if (model != None):
+            for equation in model:
+                for var in equation:
+                    if (var not in useList and var not in latentName):
+                        useList.append(var)
         self.variable += "Usevariables are\n"
         for var in useList:
             self.variable += var + "\n"
@@ -471,33 +489,46 @@ nominal, cluster, weight, auxiliary):
         if (cluster != None):
             self.analysis += "type = complex;"
 
-    def setModel(self, MplusModel, MplusCovar, cEndo, cExo, MplusIndirect, 
-MplusIdentifiers, wald):
+    def setModel(self, MplusLatent, MplusModel, MplusCovar, 
+cEndo, cExo, MplusIndirect, MplusIdentifiers, wald):
+# Latent variable definitions
+        if (MplusLatent != None):
+            for equation in MplusLatent:
+                curline = equation[0] + " by"
+                for var in equation[1:]:
+                        if (len(curline) + len(var) < 75):
+                            curline += " " + var
+                        else:
+                            self.model += curline + "\n"
+                            curline = var
+                self.model += curline + ";\n\n"
+
 # Regression equations
-        for equation in MplusModel:
-            curline = equation[0] + " on"
-            for var in equation[1:]:
-                    if (len(curline) + len(var) < 75):
-                        curline += " " + var
-                    else:
-                        self.model += curline + "\n"
-                        curline = var
-            if (MplusIdentifiers != None):
-                for id in MplusIdentifiers:
-                    if (equation == id[0]):
-                        curline += " (" + id[1] + ")"
-            self.model += curline + ";\n"
+        if (MplusModel != None):
+            for equation in MplusModel:
+                curline = equation[0] + " on"
+                for var in equation[1:]:
+                        if (len(curline) + len(var) < 75):
+                            curline += " " + var
+                        else:
+                            self.model += curline + "\n"
+                            curline = var
+                if (MplusIdentifiers != None):
+                    for id in MplusIdentifiers:
+                        if (equation == id[0]):
+                            curline += " (" + id[1] + ")"
+                self.model += curline + ";\n"
 
 # Getting lists of endogenous and exogenous variables
-        endo = []
-        for equation in MplusModel:
-            endo.append(equation[0])
-        endo = list(set(endo))
-        exo = []
-        for equation in MplusModel:
-            for var in equation:
-                if (var not in endo and var not in exo):
-                    exo.append(var)
+            endo = []
+            for equation in MplusModel:
+                endo.append(equation[0])
+            endo = list(set(endo))
+            exo = []
+            for equation in MplusModel:
+                for var in equation:
+                    if (var not in endo and var not in exo):
+                        exo.append(var)
 
 # Add defined covariances
         if (MplusCovar != None):
@@ -507,7 +538,7 @@ MplusIdentifiers, wald):
             self.model += "\n"
 
 # Covariances for all exogenous variables
-        if (cExo == True):
+        if (cExo == True and MplusModel != None):
 # Estimate variances for exogenous variables so that they
 # will be included in FIML
             if (len(exo) > 0):
@@ -526,7 +557,7 @@ MplusIdentifiers, wald):
                     self.model += curline + ";"
 
 # Covariances for all endgenous variables
-        if (cEndo == True):
+        if (cEndo == True and MplusModel != None):
             if (len(endo) > 0):
                 self.model += "\n"
                 for t in range(len(endo)-1):
@@ -585,9 +616,12 @@ def batchfile(directory, filestem):
     p = Popen(directory + "/" + filestem + ".bat", cwd=directory)
 
 def removeBlanks(processString):
-    for t in range(len(processString), 0, -1):
-            if (processString[t-1] != "\n"):
-                return (processString[0:t])
+    if (processString == None):
+        return (None)
+    else:
+        for t in range(len(processString), 0, -1):
+                if (processString[t-1] != "\n"):
+                    return (processString[0:t])
 
 def getCoefficients(outputBlock):
     outputBlock2 = outputBlock.replace("\r", "")
@@ -668,12 +702,16 @@ class MplusPAoutput:
         infile.close()
         outputList = fileText.split("\n")
 
+        self.header = """                                                                   Two-Tailed 
+                                   Estimate       S.E.  Est./S.E.    P-Value"""
         self.summary = None
         self.warnings = None
         self.fit = None
+        self.measurement = None
         self.coefficients = None
         self.covariances = None
         self.descriptives = None
+        self.Zmeasurement = None
         self.Zcoefficients = None
         self.Zcovariances = None
         self.Zdescriptives = None
@@ -718,24 +756,56 @@ class MplusPAoutput:
             self.fit = "\n".join(outputList[start:end])
             self.fit = removeBlanks(self.fit)
 
+# Unstandardized measurement model
+        start = end
+        secexists = 0
+        for t in range(start, len(outputList)):
+            if (re.search(r"\bBY\b", outputList[t])):
+                start = t
+                secexists = 1
+                break
+        if (secexists == 1):
+            for t in range(start, len(outputList)):
+                if (re.search(r"\bON\b", outputList[t]) or
+    re.search(r"\bWITH\b", outputList[t]) or
+    re.search(r"\bMeans\b", outputList[t])):
+                    end = t
+                    break
+            self.measurement = "\n".join(outputList[start:end])
+            self.measurement = removeBlanks(self.measurement)
+
 # Unstandardized coefficients
         start = end
+        secexists = 0
         for t in range(start, len(outputList)):
-            if (re.search(r"\bWITH\b", outputList[t]) or
-re.search(r"\bMeans\b", outputList[t])):
-                end = t
+            if (re.search(r"\bON\b", outputList[t])):
+                start = t
+                secexists = 1
                 break
-        self.coefficients = "\n".join(outputList[start:end])
-        self.coefficients = removeBlanks(self.coefficients)
+        if (secexists == 1):
+            for t in range(start, len(outputList)):
+                if (re.search(r"\bWITH\b", outputList[t]) or
+    re.search(r"\bMeans\b", outputList[t])):
+                    end = t
+                    break
+            self.coefficients = "\n".join(outputList[start:end])
+            self.coefficients = removeBlanks(self.coefficients)
 
 # Unstandardized covariances
         start = end
+        secexists = 0
         for t in range(start, len(outputList)):
-            if (re.search(r"\bMeans\b", outputList[t])):
-                end = t
+            if (re.search(r"\bWITH\b", outputList[t])):
+                start = t
+                secexists = 1
                 break
-        self.covariances = "\n".join(outputList[start:end])
-        self.covariances = removeBlanks(self.covariances)
+        if (secexists == 1):
+            for t in range(start, len(outputList)):
+                if (re.search(r"\bMeans\b", outputList[t])):
+                    end = t
+                    break
+            self.covariances = "\n".join(outputList[start:end])
+            self.covariances = removeBlanks(self.covariances)
 
 # Unstandardized Descriptives
         start = end
@@ -747,28 +817,57 @@ re.search(r"\bMeans\b", outputList[t])):
         self.descriptives = "\n".join(outputList[start:end])
         self.descriptives = removeBlanks(self.descriptives)
 
-# Standardized coefficients
+# Standardized measurement model
         if ("MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings):
-            for t in range(end, len(outputList)):
-                if ("STDYX" in outputList[t]):
-                    start = t
-                    break
+            start = end
+            secexists = 0
             for t in range(start, len(outputList)):
-                if (re.search(r"\bWITH\b", outputList[t]) or
-re.search(r"\bMeans\b", outputList[t])):
-                    end = t
+                if (re.search(r"\bBY\b", outputList[t])):
+                    start = t
+                    secexists = 1
                     break
-            self.Zcoefficients = "\n".join(outputList[start:end])
-            self.Zcoefficients = removeBlanks(self.Zcoefficients)
+            if (secexists == 1):
+                for t in range(start, len(outputList)):
+                    if (re.search(r"\bON\b", outputList[t]) or
+    re.search(r"\bWITH\b", outputList[t]) or
+    re.search(r"\bMeans\b", outputList[t])):
+                        end = t
+                        break
+                self.Zmeasurement = "\n".join(outputList[start:end])
+                self.Zmeasurement = removeBlanks(self.Zmeasurement)
+
+# Standardized coefficients
+            start = end
+            secexists = 0
+            for t in range(end, len(outputList)):
+                if (re.search(r"\bON\b", outputList[t])):
+                    start = t
+                    secexists = 1
+                    break
+            if (secexists == 1):
+                for t in range(start, len(outputList)):
+                    if (re.search(r"\bWITH\b", outputList[t]) or
+    re.search(r"\bMeans\b", outputList[t])):
+                        end = t
+                        break
+                self.Zcoefficients = "\n".join(outputList[start:end])
+                self.Zcoefficients = removeBlanks(self.Zcoefficients)
 
 # Standardized covariances
             start = end
+            secexists = 0
             for t in range(start, len(outputList)):
-                if (re.search(r"\bMeans\b", outputList[t])):
-                    end = t
+                if (re.search(r"\bWITH\b", outputList[t])):
+                    start = t
+                    secexists = 1
                     break
-            self.Zcovariances = "\n".join(outputList[start:end])
-            self.Zcovariances = removeBlanks(self.Zcovariances)
+            if (secexists == 1):
+                for t in range(start, len(outputList)):
+                    if (re.search(r"\bMeans\b", outputList[t])):
+                        end = t
+                        break
+                self.Zcovariances = "\n".join(outputList[start:end])
+                self.Zcovariances = removeBlanks(self.Zcovariances)
 
 # Standardized descriptives
             start = end
@@ -837,7 +936,6 @@ or "MODIFICATION" in outputList[t]):
 #    C) Change "StdYX E.P.C." to "StdYX EPC" = gain of 2 for each var
 # Making all variables length of 23
 
-# Coefficients sections
 # Variables
         for var1, var2 in zip(Mplus, SPSS):
             var1 += " "*(8-len(var1))
@@ -848,12 +946,16 @@ or "MODIFICATION" in outputList[t]):
                 var2 = var2[:23]
             var2 = " " + var2 + " "
 
+            if (self.measurement != None):
+                self.measurement = self.measurement.replace(var1.upper(), var2)
             if (self.coefficients != None):
                 self.coefficients = self.coefficients.replace(var1.upper(), var2)
             if (self.covariances != None):
                 self.covariances = self.covariances.replace(var1.upper(), var2)
             if (self.descriptives != None):
                 self.descriptives = self.descriptives.replace(var1.upper(), var2)
+            if (self.Zmeasurement != None):
+                self.Zmeasurement = self.Zmeasurement.replace(var1.upper(), var2)
             if (self.Zcoefficients != None):
                 self.Zcoefficients = self.Zcoefficients.replace(var1.upper(), var2)
             if (self.Zcovariances != None):
@@ -864,29 +966,6 @@ or "MODIFICATION" in outputList[t]):
                 self.indirect = self.indirect.replace(var1.upper(), var2)
             if (self.Zindirect != None):
                 self.Zindirect = self.Zindirect.replace(var1.upper(), var2)
-
-# Headers
-        oldheader = "Two-Tailed"
-        newheader = "               Two-Tailed"
-        if (self.coefficients != None):
-            self.coefficients = self.coefficients.replace(oldheader, newheader)
-        if (self.Zcoefficients != None):
-            self.Zcoefficients = self.Zcoefficients.replace(oldheader, newheader)
-        if (self.indirect != None):
-            self.indirect = self.indirect.replace(oldheader, newheader)
-        if (self.Zindirect != None):
-            self.Zindirect = self.Zindirect.replace(oldheader, newheader)
-
-        oldheader = "Estimate       S.E.  Est./S.E.    P-Value"
-        newheader = "               Estimate       S.E.  Est./S.E.    P-Value"""
-        if (self.coefficients != None):
-            self.coefficients = self.coefficients.replace(oldheader, newheader)
-        if (self.Zcoefficients != None):
-            self.Zcoefficients = self.Zcoefficients.replace(oldheader, newheader)
-        if (self.indirect != None):
-            self.indirect = self.indirect.replace(oldheader, newheader)
-        if (self.Zindirect != None):
-            self.Zindirect = self.Zindirect.replace(oldheader, newheader)
 
 # Indirect section
         if (self.indirect != None):
@@ -943,21 +1022,45 @@ in self.warnings)):
         if ("MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings):
             spss.Submit("title 'FIT STATISTICS'.")
             print self.fit
-        spss.Submit("title 'UNSTANDARDIZED COEFFICIENTS'.")
-        print self.coefficients
-        spss.Submit("title 'UNSTANDARDIZED COVARIANCES'.")
-        print self.covariances
+        if (self.measurement != None):
+            spss.Submit("title 'UNSTANDARDIZED MEASUREMENT MODEL'.")
+            print "Unstandardized"
+            print self.header
+            print self.measurement
+        if (self.coefficients != None):
+            spss.Submit("title 'UNSTANDARDIZED COEFFICIENTS'.")
+            print "Unstandardized"
+            print self.header
+            print self.coefficients
+        if (self.covariances != None):
+            spss.Submit("title 'UNSTANDARDIZED COVARIANCES'.")
+            print "Unstandardized"
+            print self.header
+            print self.covariances
         spss.Submit("title 'UNSTANDARDIZED DESCRIPTIVES'.")
+        print "Unstandardized"
+        print self.header
         print self.descriptives
 
+        if (self.Zmeasurement != None):
+            spss.Submit("title 'STANDARDIZED MEASUREMENT MODEL'.")
+            print "Standardized"
+            print self.header
+            print self.Zmeasurement
         if (self.Zcoefficients != None):
             spss.Submit("title 'STANDARDIZED COEFFICIENTS'.")
+            print "Standardized"
+            print self.header
             print self.Zcoefficients
         if (self.Zcovariances != None):
             spss.Submit("title 'STANDARDIZED COVARIANCES'.")
+            print "Standardized"
+            print self.header
             print self.Zcovariances
         if (self.Zdescriptives != None):
             spss.Submit("title 'STANDARDIZED DESCRIPTIVES'.")
+            print "Standardized"
+            print self.header
             print self.Zdescriptives
         if (self.r2 != None):
             spss.Submit("title 'R-SQUARES'.")
@@ -1114,7 +1217,7 @@ alter type SpecificEffect (f8.0)."""
         spss.SetActive(datasetObj)
         spss.EndDataStep()
 
-def MplusPathAnalysis(inpfile, model, covar = None, 
+def MplusPathAnalysis(inpfile, latent = None, model = None, covar = None, 
 corrEndo = False, corrExo = True, 
 useobservations = None, indirect = None, identifiers = None, wald = None,
 categorical = None, censored = None, count = None, nominal = None,
@@ -1144,29 +1247,58 @@ waittime = 5):
     if (not os.path.exists(outdir)):
         print("Error: Output directory does not exist")
         error = 1
-    variableError = 0
-    for equation in model:
-        for var in equation:
-            if (var.upper() not in SPSSvariablesCaps):
-                variableError = 1
-    if (variableError == 1):
-        print("Error: Variable listed in model not in current data set")
-        error = 1
-    
+    if (latent != None):
+        variableError = 0
+        for equation in latent:
+            for var in equation[1:]:
+                if (var.upper() not in SPSSvariablesCaps):
+                    variableError = 1
+        if (variableError == 1):
+            print("Error: Variable listed in latent variable definition not in current data set")
+            error = 1
+    if (model != None):
+        variableError = 0
+        for equation in model:
+            for var in equation:
+                if (var.upper() not in SPSSvariablesCaps):
+                    variableError = 1
+                    for latentvar in latent:
+                        if (var.upper() == latentvar[0].upper()):
+                            variableError = 0
+        if (variableError == 1):
+            print("Error: Variable listed in model not in current data set")
+            error = 1
+
     if (error == 0):
 # Export data
         dataname = outdir + fname + ".dat"
         MplusVariables = exportMplus(dataname)
 
+# Define latent variables using Mplus variables
+        if (latent == None):
+            MplusLatent = None
+        else:
+            MplusLatent = []
+            for t in latent:
+                MplusLatent.append([i.upper() for i in t])
+            for t in range(len(MplusLatent)):
+                for i in range(len(MplusLatent[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (MplusLatent[t][i] == s):
+                            MplusLatent[t][i] = m
+
 # Define model using Mplus variables
-        MplusModel = []
-        for t in model:
-            MplusModel.append([i.upper() for i in t])
-        for t in range(len(MplusModel)):
-            for i in range(len(MplusModel[t])):
-                for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                    if (MplusModel[t][i] == s):
-                        MplusModel[t][i] = m
+        if (model == None):
+            MplusModel = None
+        else:
+            MplusModel = []
+            for t in model:
+                MplusModel.append([i.upper() for i in t])
+            for t in range(len(MplusModel)):
+                for i in range(len(MplusModel[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (MplusModel[t][i] == s):
+                            MplusModel[t][i] = m
 
 # Convert variables in covariance list to Mplus
         if (covar == None):
@@ -1261,13 +1393,13 @@ MplusCount, MplusNominal]
         pathProgram = MplusPAprogram()
         pathProgram.setTitle("Created by MplusPathAnalysis")
         pathProgram.setData(dataname)
-        print MplusAuxiliary
-        pathProgram.setVariable(MplusVariables, MplusModel, MplusUseobservations,
+        pathProgram.setVariable(MplusVariables, MplusLatent, MplusModel, 
+MplusUseobservations,
 MplusCategorical, MplusCensored, MplusCount, MplusNominal,
 MplusCluster, MplusWeight, MplusAuxiliary)
         pathProgram.setAnalysis(MplusCluster)
-        pathProgram.setModel(MplusModel, MplusCovar, corrEndo, corrExo, 
-MplusIndirect, MplusIdentifiers, wald)
+        pathProgram.setModel(MplusLatent, MplusModel, MplusCovar, 
+corrEndo, corrExo, MplusIndirect, MplusIdentifiers, wald)
         pathProgram.setOutput("stdyx;\nmodindices;")
         pathProgram.write(outdir + fname + ".inp")
 
@@ -1285,10 +1417,8 @@ MplusVariables, SPSSvariables)
             pathOutput.toSPSSdata(datasetName, datasetLabels)
 
 # Create indirect effects dataset
-        print indDatasetName
         if (indDatasetName != None):
             pathOutput.indirectToSPSSdata(indDatasetName, datasetLabels)
 
 end program python.
 set printback = on.
-COMMENT BOOKMARK;LINE_NUM=1116;ID=2.
