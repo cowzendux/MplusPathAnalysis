@@ -68,7 +68,7 @@ weight = "demoweight",
 auxiliary = ["grade", "FRLper"],  
 datasetName = "CLASS",  
 indDatasetName = "CLASSind",  
-datasetLabels = ["CLASS", "Mediation"]  
+datasetLabels = ["CLASS", "Mediation"],  
 waittime = 10)**
 * This would test a model where a Treatment (Tx) is expected to affect attitudes towrd children (att_ch), which in turn is related to be related to three measures assessing classroom interactions (CO, ES, and IS). Years of experience teaching (yrs_tch), teacher age (age), and teacher gender (gender) are included as covariates in all of the models.  Treatment is included as a covariate in the models predicting classroom interactions so that the model can be used to accurately estimate the mediated effect. 
 * A latent variable "CHLATENT" is created to represent the characteristics of the children in the classroom, based on child income (chincome_mean), child free and reduced lunch status (chfrl_mean), and mother education (chmomed_mean).
