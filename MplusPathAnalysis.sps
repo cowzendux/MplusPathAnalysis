@@ -115,13 +115,13 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 
 * Example: 
 MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",
-latent = 
-model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender"], 
-["CO", "Tx", "att_ch", "yrs_tch", "age", "gender"],
+latent = [ ["CHLATENT", "chincome_mean", "chfrl_mean", "chmomed_mean"] ],
+model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender", "CHLATENT"], 
+["CO", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"],
 ["CO", "Educ"],
-["ES", "Tx", "att_ch", "yrs_tch", "age", "gender"],
+["ES", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"],
 ["ES", "Educ"],
-["IS", "Tx", "att_ch", "yrs_tch", "age", "gender"] 
+["IS", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"] 
 ["IS", "Educ"] ],
 covar = [ ["CO","ES"], ["CO", "IS"] ],
 covEndo = False,
@@ -225,6 +225,7 @@ categorical, censored, count, nominal
 * 2014-08-19 Finished implementation of latent variables
 * 2014-08-19a Renamed covEndo and covExo arguments
     Fixed documentation
+* 2014-08-28 Corrected presentation of latent variables in output
 
 set printback = off.
 begin program python.
@@ -1251,6 +1252,15 @@ waittime = 5):
     if (latent != None):
         variableError = 0
         for equation in latent:
+            if (equation[0].upper() in SPSSvariablesCaps):
+                variableError = 1
+                break
+            if (variableError == 1):
+                print "Error: Latent variable name overlaps with existing variable name"
+                error = 1
+    if (latent != None):
+        variableError = 0
+        for equation in latent:
             for var in equation[1:]:
                 if (var.upper() not in SPSSvariablesCaps):
                     variableError = 1
@@ -1403,6 +1413,17 @@ MplusCluster, MplusWeight, MplusAuxiliary)
 covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
         pathProgram.setOutput("stdyx;\nmodindices;")
         pathProgram.write(outdir + fname + ".inp")
+
+# Add latent variables to SPSSvariables lists
+        if (latent != None):
+            for equation in latent:
+                SPSSvariables.append(equation[0])
+                SPSSvariablesCaps.append(equation[0].upper())
+
+# Add latent variables to MplusVariable list
+        if (latent != None):
+    	       for equation in latent:
+                MplusVariables.append(equation[0].upper())
 
 # Run input program
         batchfile(outdir, fname)
