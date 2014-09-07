@@ -7,8 +7,10 @@ This program allows users to identify a path model that they want to test on an 
 This and other SPSS Python Extension functions can be found at http://www.stat-help.com/python.html
 
 ##Usage
-**MplusPathAnalysis(impfile, latent, model, covar, covEndo, covExo, usevariables, indirect, identifiers, wald, categorical, censored, count, nominal, cluster, weight, datasetName, datasetLabels, indDatasetName, waittime)**
+**MplusPathAnalysis(impfile, runModel, viewOutput, latent, model, covar, covEndo, covExo, usevariables, indirect, identifiers, wald, categorical, censored, count, nominal, cluster, weight, datasetName, datasetLabels, indDatasetName, waittime)**
 * "impfile" is a string identifying the directory and filename of Mplus input file to be created by the program. This filename must end with .inp . The data file will automatically be saved to the same directory. This argument is required.
+* "runModel" is a boolean argument indicating whether or not you want the program to actually run the program it creates based on the model you define. You may choose to not run the model when you want to use the program to load an existing output file into SPSS. However, when doing this, you should first load the corresponding data set so that the function can determine the appropriate translation between the Mplus variable names and SPSS variable names. By default, the model is run.
+* "viewOutput" is a boolean argument indicating whether or not you want the program to read the created output into SPSS. You may choose not to read the output into SPSS when you know that it will take a very long time to run and you do not want to tie up SPSS while you are waiting for Mplus to finish. If you choose not to view the output, then the program will also not create a dataset for the coefficients. By default, the output is read into SPSS.
 * "latent" is a list of lists identifying the relations between observed and latent variables. This argument is optional, and can be omitted if your model does not have any latent variables. When creating this argument, you first create a list of strings for each latent variable where the first element is the name of the latent variable and the remaining elements are the names of the observed variables that load on that latent variable. You then combine these individual latent variable lists into a larger list identifying the full measurement model.
 * "model" is a list of lists identifying the equations in your path model.  First, you create a set of lists that each have the outcome as the first element and then have the predictors as the following elements. Then you combine these individual equation lists into a larger list identifying the entire path model. 
 * "covar" is a list of lists identifying covariances with endogenous variables. First, you create a set of lists that identify pairs of variables that are allowed to covary. Then you combine these lists of pairs into a single, overall list. This argument defaults to None, which would indicate that you are not explicitly identifying covariances among the variables. However, your choices for the "covEndo" and the "covExo" arguments may allow additional covariances.
@@ -40,6 +42,8 @@ cluster = "school")**
 
 ##Example 2 - Full specification
 **MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",  
+runModel = True,  
+veiwOutput = True,   
 latent = [ ["CHLATENT", "chincome_mean", "chfrl_mean", "chmomed_mean"] ],  
 model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender", "CHLATENT"],   
 &nbsp;&nbsp;&nbsp;&nbsp;["CO", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"],  
@@ -71,6 +75,7 @@ indDatasetName = "CLASSind",
 datasetLabels = ["CLASS", "Mediation"],  
 waittime = 10)**
 * This would test a model where a Treatment (Tx) is expected to affect attitudes towrd children (att_ch), which in turn is related to be related to three measures assessing classroom interactions (CO, ES, and IS). Years of experience teaching (yrs_tch), teacher age (age), and teacher gender (gender) are included as covariates in all of the models.  Treatment is included as a covariate in the models predicting classroom interactions so that the model can be used to accurately estimate the mediated effect. 
+* The program will both run the model and load the program into SPSS.
 * A latent variable "CHLATENT" is created to represent the characteristics of the children in the classroom, based on child income (chincome_mean), child free and reduced lunch status (chfrl_mean), and mother education (chmomed_mean).
 * CO is allowed to covary with both ES and IS. 
 * The endogenous variables (which include CO, ES, and IS) are not automatically allowed to covary, although two specific covariances are allowed (CO with ES and CO with IS) as mentioned above. 
