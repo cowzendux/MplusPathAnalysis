@@ -7,7 +7,8 @@
 * that will perform the path analysis in Mplus, then loads the important
 * parts of the Mplus output into the SPSS output window.
 
-**** Usage: MplusPathAnalysis(impfile, latent, model, covar, covEndo, covExo, 
+**** Usage: MplusPathAnalysis(impfile, runModel, viewOutput,
+latent, model, covar, covEndo, covExo, 
 useobservations, indirect, identifiers, wald,
 categorical, censored, count, nominal, cluster, weight, 
 datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
@@ -115,6 +116,7 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 
 * Example: 
 MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",
+runModel = True, viewOutput = True,
 latent = [ ["CHLATENT", "chincome_mean", "chfrl_mean", "chmomed_mean"] ],
 model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender", "CHLATENT"], 
 ["CO", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"],
@@ -148,6 +150,8 @@ waittime = 10)
 * This would test a model where a Treatment (Tx) is expected to affect 
 * attitudes towrd children (att_ch), which in turn is related to be related
 * to three measures assessing classroom interactions (CO, ES, and IS).
+* The toggles are set so that the program will run the model in Mplus 
+* and read the output into SPSS.
 * Years of experience teaching (yrs_tch), teacher age (age), and teacher
 * gender (gender) are included as covariates in all of the models. 
 * Treatment is included as a covariate in the models predicting classroom
@@ -226,6 +230,7 @@ categorical, censored, count, nominal
 * 2014-08-19a Renamed covEndo and covExo arguments
     Fixed documentation
 * 2014-08-28 Corrected presentation of latent variables in output
+* 2014-09-07 Added runModel and viewOutput arguments
 
 set printback = off.
 begin program python.
@@ -1219,7 +1224,8 @@ alter type SpecificEffect (f8.0)."""
         spss.SetActive(datasetObj)
         spss.EndDataStep()
 
-def MplusPathAnalysis(inpfile, latent = None, model = None, covar = None, 
+def MplusPathAnalysis(inpfile, runModel = True, viewOutput = True,
+latent = None, model = None, covar = None, 
 covEndo = False, covExo = True, 
 useobservations = None, indirect = None, identifiers = None, wald = None,
 categorical = None, censored = None, count = None, nominal = None,
@@ -1285,134 +1291,135 @@ waittime = 5):
         dataname = outdir + fname + ".dat"
         MplusVariables = exportMplus(dataname)
 
-# Define latent variables using Mplus variables
-        if (latent == None):
-            MplusLatent = None
-        else:
-            MplusLatent = []
-            for t in latent:
-                MplusLatent.append([i.upper() for i in t])
-            for t in range(len(MplusLatent)):
-                for i in range(len(MplusLatent[t])):
-                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                        if (MplusLatent[t][i] == s):
-                            MplusLatent[t][i] = m
-
-# Define model using Mplus variables
-        if (model == None):
-            MplusModel = None
-        else:
-            MplusModel = []
-            for t in model:
-                MplusModel.append([i.upper() for i in t])
-            for t in range(len(MplusModel)):
-                for i in range(len(MplusModel[t])):
-                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                        if (MplusModel[t][i] == s):
-                            MplusModel[t][i] = m
-
-# Convert variables in covariance list to Mplus
-        if (covar == None):
-            MplusCovar = None
-        else:
-            MplusCovar = []
-            for t in covar:
-                MplusCovar.append([i.upper() for i in t])
-            for t in range(len(MplusCovar)):
-                for i in range(2):
-                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                        if (MplusCovar[t][i] == s):
-                            MplusCovar[t][i] = m
-
-# Define indirect effects using Mplus variables
-        if (indirect == None):
-            MplusIndirect = None
-        else:
-            MplusIndirect = []
-            for t in indirect:
-                MplusIndirect.append([i.upper() for i in t])
-            for t in range(len(MplusIndirect)):
-                for i in range(len(MplusIndirect[t])):
-                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                        if (MplusIndirect[t][i] == s):
-                            MplusIndirect[t][i] = m
-
-# Convert identifiers to Mplus
-        if (identifiers == None):
-            MplusIdentifiers = None
-        else:
-            MplusIdentifiers = []
-            idEquations = []
-            for t in identifiers:
-                j = []
-                for i in t[0]:
-                    j.append(i.upper())
-                idEquations.append(j)
-            for t in range(len(idEquations)):
-                for i in range(len(idEquations[t])):
-                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                        if (idEquations[t][i] == s):
-                            idEquations[t][i] = m
-                MplusIdentifiers.append([idEquations[t], identifiers[t][1]])
-
-# Convert useobservations to Mplus
-        if (useobservations == None):
-            MplusUseobservations = None
-        else:
-            MplusUseobservations = useobservations
-            for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                z = re.compile(s, re.IGNORECASE)
-                MplusUseobservations = z.sub(m, MplusUseobservations)
-
-# Convert cluster variable to Mplus
-        if (cluster == None):
-            MplusCluster = None
-        else:
-            for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                if (cluster.upper() == s):
-                    MplusCluster = m
-
-# Convert variable list arguments to Mplus
-        lvarList = [auxiliary, categorical, censored, count, nominal]
-        MplusAuxiliary = []
-        MplusCategorical = []
-        MplusCensored = []
-        MplusCount = []
-        MplusNominal = []
-        lvarMplusList = [MplusAuxiliary, MplusCategorical, MplusCensored,
-MplusCount, MplusNominal]
-        for t in range(len(lvarList)):
-            if (lvarList[t] == None):
-                lvarMplusList[t] = None
+        if (runModel == True):
+    # Define latent variables using Mplus variables
+            if (latent == None):
+                MplusLatent = None
             else:
-                for i in lvarList[t]:
-                    lvarMplusList[t].append(i.upper())
-                for i in range(len(lvarMplusList[t])):
-                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                        if (lvarMplusList[t][i] == s):
-                            lvarMplusList[t][i] = m
+                MplusLatent = []
+                for t in latent:
+                    MplusLatent.append([i.upper() for i in t])
+                for t in range(len(MplusLatent)):
+                    for i in range(len(MplusLatent[t])):
+                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                            if (MplusLatent[t][i] == s):
+                                MplusLatent[t][i] = m
 
-# Convert weight variable to Mplus
-        if (weight == None):
-            MplusWeight = None
-        else:
-            for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                if (weight.upper() == s):
-                    MplusWeight = m
+    # Define model using Mplus variables
+            if (model == None):
+                MplusModel = None
+            else:
+                MplusModel = []
+                for t in model:
+                    MplusModel.append([i.upper() for i in t])
+                for t in range(len(MplusModel)):
+                    for i in range(len(MplusModel[t])):
+                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                            if (MplusModel[t][i] == s):
+                                MplusModel[t][i] = m
 
-# Create input program
-        pathProgram = MplusPAprogram()
-        pathProgram.setTitle("Created by MplusPathAnalysis")
-        pathProgram.setData(dataname)
-        pathProgram.setVariable(MplusVariables, MplusLatent, MplusModel, 
-MplusUseobservations,
-MplusCategorical, MplusCensored, MplusCount, MplusNominal,
-MplusCluster, MplusWeight, MplusAuxiliary)
-        pathProgram.setAnalysis(MplusCluster)
-        pathProgram.setModel(MplusLatent, MplusModel, MplusCovar, 
-covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
-        pathProgram.setOutput("stdyx;\nmodindices;")
-        pathProgram.write(outdir + fname + ".inp")
+    # Convert variables in covariance list to Mplus
+            if (covar == None):
+                MplusCovar = None
+            else:
+                MplusCovar = []
+                for t in covar:
+                    MplusCovar.append([i.upper() for i in t])
+                for t in range(len(MplusCovar)):
+                    for i in range(2):
+                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                            if (MplusCovar[t][i] == s):
+                                MplusCovar[t][i] = m
+
+    # Define indirect effects using Mplus variables
+            if (indirect == None):
+                MplusIndirect = None
+            else:
+                MplusIndirect = []
+                for t in indirect:
+                    MplusIndirect.append([i.upper() for i in t])
+                for t in range(len(MplusIndirect)):
+                    for i in range(len(MplusIndirect[t])):
+                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                            if (MplusIndirect[t][i] == s):
+                                MplusIndirect[t][i] = m
+
+    # Convert identifiers to Mplus
+            if (identifiers == None):
+                MplusIdentifiers = None
+            else:
+                MplusIdentifiers = []
+                idEquations = []
+                for t in identifiers:
+                    j = []
+                    for i in t[0]:
+                        j.append(i.upper())
+                    idEquations.append(j)
+                for t in range(len(idEquations)):
+                    for i in range(len(idEquations[t])):
+                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                            if (idEquations[t][i] == s):
+                                idEquations[t][i] = m
+                    MplusIdentifiers.append([idEquations[t], identifiers[t][1]])
+
+    # Convert useobservations to Mplus
+            if (useobservations == None):
+                MplusUseobservations = None
+            else:
+                MplusUseobservations = useobservations
+                for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                    z = re.compile(s, re.IGNORECASE)
+                    MplusUseobservations = z.sub(m, MplusUseobservations)
+
+    # Convert cluster variable to Mplus
+            if (cluster == None):
+                MplusCluster = None
+            else:
+                for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                    if (cluster.upper() == s):
+                        MplusCluster = m
+
+    # Convert variable list arguments to Mplus
+            lvarList = [auxiliary, categorical, censored, count, nominal]
+            MplusAuxiliary = []
+            MplusCategorical = []
+            MplusCensored = []
+            MplusCount = []
+            MplusNominal = []
+            lvarMplusList = [MplusAuxiliary, MplusCategorical, MplusCensored,
+    MplusCount, MplusNominal]
+            for t in range(len(lvarList)):
+                if (lvarList[t] == None):
+                    lvarMplusList[t] = None
+                else:
+                    for i in lvarList[t]:
+                        lvarMplusList[t].append(i.upper())
+                    for i in range(len(lvarMplusList[t])):
+                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                            if (lvarMplusList[t][i] == s):
+                                lvarMplusList[t][i] = m
+
+    # Convert weight variable to Mplus
+            if (weight == None):
+                MplusWeight = None
+            else:
+                for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                    if (weight.upper() == s):
+                        MplusWeight = m
+
+    # Create input program
+            pathProgram = MplusPAprogram()
+            pathProgram.setTitle("Created by MplusPathAnalysis")
+            pathProgram.setData(dataname)
+            pathProgram.setVariable(MplusVariables, MplusLatent, MplusModel, 
+    MplusUseobservations,
+    MplusCategorical, MplusCensored, MplusCount, MplusNominal,
+    MplusCluster, MplusWeight, MplusAuxiliary)
+            pathProgram.setAnalysis(MplusCluster)
+            pathProgram.setModel(MplusLatent, MplusModel, MplusCovar, 
+    covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
+            pathProgram.setOutput("stdyx;\nmodindices;")
+            pathProgram.write(outdir + fname + ".inp")
 
 # Add latent variables to SPSSvariables lists
         if (latent != None):
@@ -1425,22 +1432,24 @@ covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
     	       for equation in latent:
                 MplusVariables.append(equation[0].upper())
 
-# Run input program
-        batchfile(outdir, fname)
-        time.sleep(waittime)
+        if (runModel == True):
+    # Run input program
+            batchfile(outdir, fname)
+            time.sleep(waittime)
 
-# Parse output
-        pathOutput = MplusPAoutput(outdir + fname + ".out", 
-MplusVariables, SPSSvariables)
-        pathOutput.toSPSSoutput()
+        if (viewOutput == True):
+    # Parse output
+            pathOutput = MplusPAoutput(outdir + fname + ".out", 
+    MplusVariables, SPSSvariables)
+            pathOutput.toSPSSoutput()
 
-# Create coefficient dataset
-        if (datasetName != None):
-            pathOutput.toSPSSdata(datasetName, datasetLabels)
+    # Create coefficient dataset
+            if (datasetName != None):
+                pathOutput.toSPSSdata(datasetName, datasetLabels)
 
-# Create indirect effects dataset
-        if (indDatasetName != None):
-            pathOutput.indirectToSPSSdata(indDatasetName, datasetLabels)
+    # Create indirect effects dataset
+            if (indDatasetName != None):
+                pathOutput.indirectToSPSSdata(indDatasetName, datasetLabels)
 
 end program python.
 set printback = on.
