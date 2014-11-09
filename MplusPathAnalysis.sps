@@ -231,6 +231,7 @@ categorical, censored, count, nominal
     Fixed documentation
 * 2014-08-28 Corrected presentation of latent variables in output
 * 2014-09-07 Added runModel and viewOutput arguments
+* 2014-11-09 Corrected error when checking model
 
 set printback = off.
 begin program python.
@@ -1279,9 +1280,10 @@ waittime = 5):
             for var in equation:
                 if (var.upper() not in SPSSvariablesCaps):
                     variableError = 1
-                    for latentvar in latent:
-                        if (var.upper() == latentvar[0].upper()):
-                            variableError = 0
+                    if (latent != None):
+                        for latentvar in latent:
+                            if (var.upper() == latentvar[0].upper()):
+                                variableError = 0
         if (variableError == 1):
             print("Error: Variable listed in model not in current data set")
             error = 1
