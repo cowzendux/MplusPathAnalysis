@@ -7,12 +7,12 @@
 * that will perform the path analysis in Mplus, then loads the important
 * parts of the Mplus output into the SPSS output window.
 
-**** Usage: MplusPathAnalysis(impfile, runModel, viewOutput,
+**** Usage: MplusPathAnalysis(inpfile, runModel, viewOutput,
 latent, model, covar, covEndo, covExo, 
 useobservations, indirect, identifiers, wald,
 categorical, censored, count, nominal, cluster, weight, 
 datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
-**** "impfile" is a string identifying the directory and filename of
+**** "inpfile" is a string identifying the directory and filename of
 * Mplus input file to be created by the program. This filename must end with
 * .inp . The data file will automatically be saved to the same directory. This
 * argument is required.
@@ -23,6 +23,25 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * the latent variable and the remaining elements are the names of the observed
 * variables that load on that latent variable. You then combine these individual
 * latent variable lists into a larger list identifying the full measurement model.
+**** "runModel" is a boolean argument indicating whether or not you want the 
+* program to actually run the program it creates based on the model you define. 
+* You may choose to not run the model when you want to use the program to 
+* load an existing output file into SPSS. However, when doing this, you should 
+* first load the corresponding data set so that the function can determine the 
+* appropriate translation between the Mplus variable names and SPSS variable 
+* names. By default, the model is run.
+**** "viewOutput" is a boolean argument indicating whether or not you want the 
+* program to read the created output into SPSS. You may choose not to read 
+* the output into SPSS when you know that it will take a very long time to run and
+* you do not want to tie up SPSS while you are waiting for Mplus to finish. If you 
+* choose not to view the output, then the program will also not create a dataset 
+* for the coefficients. By default, the output is read into SPSS.
+**** "suppressSPSS" is a boolean argument indicating whether or not you want
+* the program to supress SPSS output while running the model. Typically this
+* output is not useful and merely clogs up the output window. However, if your
+* model is not running correctly, the SPSS output can help you see where
+* the errors are. Setting this argument to True will not suppress the Mplus
+* output. By default, the SPSS output is not suppressed.
 **** "model" is a list of lists identifying the equations in your
 * path model.  First, you create a set of lists that each have the outcome as
 * the first element and then have the predictors as the following elements.
@@ -116,7 +135,9 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 
 * Example: 
 MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",
-runModel = True, viewOutput = True,
+runModel = True, 
+viewOutput = True, 
+suppressSPSS = True,
 latent = [ ["CHLATENT", "chincome_mean", "chfrl_mean", "chmomed_mean"] ],
 model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender", "CHLATENT"], 
 ["CO", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"],
@@ -150,8 +171,8 @@ waittime = 10)
 * This would test a model where a Treatment (Tx) is expected to affect 
 * attitudes towrd children (att_ch), which in turn is related to be related
 * to three measures assessing classroom interactions (CO, ES, and IS).
-* The toggles are set so that the program will run the model in Mplus 
-* and read the output into SPSS.
+* The toggles are set so that the program will run the model in Mplus, 
+* read the output into SPSS, and suppress the SPSS output.
 * Years of experience teaching (yrs_tch), teacher age (age), and teacher
 * gender (gender) are included as covariates in all of the models. 
 * Treatment is included as a covariate in the models predicting classroom
@@ -232,6 +253,9 @@ categorical, censored, count, nominal
 * 2014-08-28 Corrected presentation of latent variables in output
 * 2014-09-07 Added runModel and viewOutput arguments
 * 2014-11-09 Corrected error when checking model
+* 2015-01-19 Suppressed SPSS output
+* 2015-02-20 Fixed error with missing indirect output
+    Added toggle to suppress or not suppress SPSS output
 
 set printback = off.
 begin program python.
@@ -402,6 +426,7 @@ EXECUTE."""
 ############
 # Break filename over multiple lines
  splitfilepath = SPSSspaceSplit(filepath, 60)
+
 # Save data as a tab-delimited text file
 	submitstring = """SAVE TRANSLATE OUTFILE=
 	%s
@@ -1155,6 +1180,7 @@ dataset name {1}.""".format(dsetname, datasetName)
 
 # Save indirect tests to dataset
     def indirectToSPSSdata(self, datasetName = "MPAindirect", labelList = []):
+
 # Determine active data set so we can return to it when finished
         activeName = spss.ActiveDataset()
 # Set up data set if it doesn't already exist
@@ -1226,13 +1252,22 @@ alter type SpecificEffect (f8.0)."""
         spss.EndDataStep()
 
 def MplusPathAnalysis(inpfile, runModel = True, viewOutput = True,
-latent = None, model = None, covar = None, 
+suppressSPSS = False, latent = None, model = None, covar = None, 
 covEndo = False, covExo = True, 
 useobservations = None, indirect = None, identifiers = None, wald = None,
 categorical = None, censored = None, count = None, nominal = None,
 cluster = None, weight = None, auxiliary = None, 
 datasetName = None, indDatasetName = None, datasetLabels = [], 
 waittime = 5):
+
+    spss.Submit("display scratch.")
+
+# Redirect output
+    if (suppressSPSS == True):
+        submitstring = """OMS /SELECT ALL EXCEPT = [WARNINGS] 
+    /DESTINATION VIEWER = NO 
+    /TAG = 'NoJunk'."""
+        spss.Submit(submitstring)
 
 # Find directory and filename
     for t in range(len(inpfile)):
@@ -1247,6 +1282,11 @@ waittime = 5):
     for varnum in range(spss.GetVariableCount()):
         SPSSvariables.append(spss.GetVariableName(varnum))
         SPSSvariablesCaps.append(spss.GetVariableName(varnum).upper())
+
+# Restore output
+    if (suppressSPSS == True):
+        submitstring = """OMSEND TAG = 'NoJunk'."""
+        spss.Submit(submitstring)
 
 # Check for errors
     error = 0
@@ -1289,6 +1329,13 @@ waittime = 5):
             error = 1
 
     if (error == 0):
+# Redirect output
+        if (suppressSPSS == True):
+            submitstring = """OMS /SELECT ALL EXCEPT = [WARNINGS] 
+    /DESTINATION VIEWER = NO 
+    /TAG = 'NoJunk'."""
+            spss.Submit(submitstring)
+
 # Export data
         dataname = outdir + fname + ".dat"
         MplusVariables = exportMplus(dataname)
@@ -1439,11 +1486,23 @@ waittime = 5):
             batchfile(outdir, fname)
             time.sleep(waittime)
 
+# Restore output
+        if (suppressSPSS == True):
+            submitstring = """OMSEND TAG = 'NoJunk'."""
+            spss.Submit(submitstring)
+
         if (viewOutput == True):
     # Parse output
             pathOutput = MplusPAoutput(outdir + fname + ".out", 
     MplusVariables, SPSSvariables)
             pathOutput.toSPSSoutput()
+
+# Redirect output
+            if (suppressSPSS == True):
+                submitstring = """OMS /SELECT ALL EXCEPT = [WARNINGS] 
+    /DESTINATION VIEWER = NO 
+    /TAG = 'NoJunk'."""
+                spss.Submit(submitstring)
 
     # Create coefficient dataset
             if (datasetName != None):
@@ -1451,7 +1510,13 @@ waittime = 5):
 
     # Create indirect effects dataset
             if (indDatasetName != None):
-                pathOutput.indirectToSPSSdata(indDatasetName, datasetLabels)
+                if (pathOutput.indirect != None):
+                    pathOutput.indirectToSPSSdata(indDatasetName, datasetLabels)
+
+# Restore output
+            if (suppressSPSS == True):
+                submitstring = """OMSEND TAG = 'NoJunk'."""
+                spss.Submit(submitstring)
 
 end program python.
 set printback = on.
