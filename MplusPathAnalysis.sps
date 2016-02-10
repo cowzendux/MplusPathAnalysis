@@ -7,7 +7,7 @@
 * that will perform the path analysis in Mplus, then loads the important
 * parts of the Mplus output into the SPSS output window.
 
-**** Usage: MplusPathAnalysis(inpfile, runModel, viewOutput,
+**** Usage: MplusPathAnalysis(inpfile, runModel, viewOutput, suppressSPSS,
 latent, model, covar, covEndo, covExo, 
 useobservations, indirect, identifiers, wald,
 categorical, censored, count, nominal, cluster, weight, 
@@ -256,6 +256,9 @@ categorical, censored, count, nominal
 * 2015-01-19 Suppressed SPSS output
 * 2015-02-20 Fixed error with missing indirect output
     Added toggle to suppress or not suppress SPSS output
+* 2016-02-06 Corrected error when there are no coefficients to extract
+* 2016-02-08 When a variable is missing from the data set, that variable is printed
+* 2016-02-09 Replaced variable names in indirect data set
 
 set printback = off.
 begin program python.
@@ -333,7 +336,7 @@ def exportMplus(filepath):
 		for i in range(t):
 			compname = spss.GetVariableName(i)
 			if (newname.lower() == compname.lower()):
-				newname = "var" + str(t+1)
+				newname = "var" + "%05d" %(t+1)
 		if (oldname != newname):
 			submitstring = "rename variables (%s = %s)." %(oldname, newname)
 			spss.Submit(submitstring)
@@ -657,26 +660,29 @@ def removeBlanks(processString):
                     return (processString[0:t])
 
 def getCoefficients(outputBlock):
-    outputBlock2 = outputBlock.replace("\r", "")
-    blockList = outputBlock2.split("\n")
-    coefficients = []
-    for t in range(len(blockList)):
-            values1 = blockList[t].split(" ")
-            values2 = []
-            for i in values1:
-                if (i != ""):
-                    values2.append(i)
+    if (outputBlock == None):
+        return None
+    else:
+       outputBlock2 = outputBlock.replace("\r", "")
+       blockList = outputBlock2.split("\n")
+       coefficients = []
+       for t in range(len(blockList)):
+               values1 = blockList[t].split(" ")
+               values2 = []
+               for i in values1:
+                   if (i != ""):
+                       values2.append(i)
 
-            if (len(values2) > 1):
-                if (values2[1] == "ON"):
-                    outcome = values2[0]
-                if (len(values2) > 2 and values2[0] != "Estimate"):
-                    line = [outcome]
-                    line.extend(values2[0:1])
-                    for j in values2[1:]:
-                        line.append(float(j))
-                    coefficients.append(line)
-    return coefficients
+               if (len(values2) > 1):
+                   if (values2[1] == "ON"):
+                       outcome = values2[0]
+                   if (len(values2) > 2 and values2[0] != "Estimate"):
+                       line = [outcome]
+                       line.extend(values2[0:1])
+                       for j in values2[1:]:
+                           line.append(float(j))
+                       coefficients.append(line)
+       return coefficients
 
 def getIndirect(outputBlock):
     outputBlock2 = outputBlock.replace("\r", "")
@@ -970,6 +976,9 @@ or "MODIFICATION" in outputList[t]):
 # Making all variables length of 23
 
 # Variables
+        print self.indirect
+        print "*****************"
+
         for var1, var2 in zip(Mplus, SPSS):
             var1 += " "*(8-len(var1))
             var1 = " " + var1 + " "
@@ -995,24 +1004,40 @@ or "MODIFICATION" in outputList[t]):
                 self.Zcovariances = self.Zcovariances.replace(var1.upper(), var2)
             if (self.Zdescriptives != None):
                 self.Zdescriptives = self.Zdescriptives.replace(var1.upper(), var2)
+            if (self.r2 != None):
+                self.r2 = self.r2.replace(var1.upper(), var2)
             if (self.indirect != None):
                 self.indirect = self.indirect.replace(var1.upper(), var2)
+                self.indirect = re.sub(r"\b"+var1.upper().strip()+r"\b", r"\b"+var2.strip() + r"\b", self.indirect)
             if (self.Zindirect != None):
                 self.Zindirect = self.Zindirect.replace(var1.upper(), var2)
+                self.Zindirect = re.sub(r"\b"+var1.upper().strip()+r"\b", r"\b"+var2.strip() + r"\b", self.Zindirect)
+
+# R2 section
+        if (self.r2 != None):
+            self.r2 = self.r2.replace("Variable        Estimate       S.E.  Est./S.E.    P-Value", 
+"Variable                       Estimate       S.E.  Est./S.E.    P-Value")
+            self.r2 = self.r2.replace("Two-Tailed", "              Two-Tailed")
 
 # Indirect section
         if (self.indirect != None):
-            self.indirect = self.indirect.replace("Total                ", 
-"Total                              ")
+            self.indirect = self.indirect.replace("Estimate       S.E.  Est./S.E.    P-Value", 
+"               Estimate       S.E.  Est./S.E.    P-Value")
+            self.indirect = self.indirect.replace("Two-Tailed", "              Two-Tailed")
+            self.indirect = self.indirect.replace("Total   ", 
+"Total                  ")
             self.indirect = self.indirect.replace("Total indirect       ",
-"Total indirect                     ")
+"Total indirect                      ")
             self.indirect = self.indirect.replace("Sum of indirect      ",
 "Sum of indirect                    ")
         if (self.Zindirect != None):
-            self.Zindirect = self.Zindirect.replace("Total                ", 
-"Total                              ")
+            self.Zindirect = self.Zindirect.replace("Estimate       S.E.  Est./S.E.    P-Value", 
+"               Estimate       S.E.  Est./S.E.    P-Value")
+            self.Zindirect = self.Zindirect.replace("Two-Tailed", "              Two-Tailed")
+            self.Zindirect = self.Zindirect.replace("Total   ", 
+"Total                  ")
             self.Zindirect = self.Zindirect.replace("Total indirect       ",
-"Total indirect                     ")
+"Total indirect                      ")
             self.Zindirect = self.Zindirect.replace("Sum of indirect      ",
 "Sum of indirect                    ")
 
@@ -1311,6 +1336,7 @@ waittime = 5):
             for var in equation[1:]:
                 if (var.upper() not in SPSSvariablesCaps):
                     variableError = 1
+                    print "Missing " + var
         if (variableError == 1):
             print("Error: Variable listed in latent variable definition not in current data set")
             error = 1
@@ -1324,6 +1350,9 @@ waittime = 5):
                         for latentvar in latent:
                             if (var.upper() == latentvar[0].upper()):
                                 variableError = 0
+                    if variableError == 1:
+                        print "Missing " + var
+                                
         if (variableError == 1):
             print("Error: Variable listed in model not in current data set")
             error = 1
@@ -1520,3 +1549,4 @@ waittime = 5):
 
 end program python.
 set printback = on.
+COMMENT BOOKMARK;LINE_NUM=1008;ID=1.
