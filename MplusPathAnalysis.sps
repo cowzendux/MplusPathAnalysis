@@ -259,6 +259,7 @@ categorical, censored, count, nominal
 * 2016-02-06 Corrected error when there are no coefficients to extract
 * 2016-02-08 When a variable is missing from the data set, that variable is printed
 * 2016-02-09 Replaced variable names in indirect data set
+* 2016-02-10 Removed debugging code
 
 set printback = off.
 begin program python.
@@ -976,9 +977,6 @@ or "MODIFICATION" in outputList[t]):
 # Making all variables length of 23
 
 # Variables
-        print self.indirect
-        print "*****************"
-
         for var1, var2 in zip(Mplus, SPSS):
             var1 += " "*(8-len(var1))
             var1 = " " + var1 + " "
@@ -1549,4 +1547,4 @@ waittime = 5):
 
 end program python.
 set printback = on.
-COMMENT BOOKMARK;LINE_NUM=1008;ID=1.
+COMMENT BOOKMARK;LINE_NUM=1006;ID=1.
