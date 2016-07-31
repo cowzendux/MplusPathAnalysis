@@ -260,6 +260,7 @@ categorical, censored, count, nominal
 * 2016-02-08 When a variable is missing from the data set, that variable is printed
 * 2016-02-09 Replaced variable names in indirect data set
 * 2016-02-10 Removed debugging code
+* 2016-07-30 Corrected error renaming variables with len > 8
 
 set printback = off.
 begin program python.
@@ -316,8 +317,8 @@ def exportMplus(filepath):
 		if (len(spss.GetVariableName(t)) > 8):
 			name = spss.GetVariableName(t)[0:8]
 			for i in range(spss.GetVariableCount()):
-				compname = spss.GetVariableName(i)
-				if (name.lower() == compname.lower()):
+				compname = spss.GetVariableName(i)[0:8]
+				if (name.lower().replace(".","_") == compname.lower().replace(".","_")):
 					name = "var" + "%05d" %(t+1)
 			submitstring = "rename variables (%s = %s)." %(spss.GetVariableName(t), name)
 			spss.Submit(submitstring)
@@ -1547,4 +1548,4 @@ waittime = 5):
 
 end program python.
 set printback = on.
-COMMENT BOOKMARK;LINE_NUM=1006;ID=1.
+COMMENT BOOKMARK;LINE_NUM=315;ID=2.
