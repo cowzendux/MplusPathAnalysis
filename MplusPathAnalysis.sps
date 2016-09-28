@@ -1,3 +1,4 @@
+* Encoding: UTF-8.
 * Use Mplus to run a Path Analysis from within SPSS
 * By Jamie DeCoster
 
@@ -260,7 +261,7 @@ categorical, censored, count, nominal
 * 2016-02-08 When a variable is missing from the data set, that variable is printed
 * 2016-02-09 Replaced variable names in indirect data set
 * 2016-02-10 Removed debugging code
-* 2016-07-30 Corrected error renaming variables with len > 8
+* 2016-09-28 Replaced nonalphanumerics before checking for duplicate variable names
 
 set printback = off.
 begin program python.
@@ -310,19 +311,6 @@ def exportMplus(filepath):
  for varnum in range(spss.GetVariableCount()):
   SPSSvarlist.append(spss.GetVariableName(varnum))
 
-#########
-# Rename variables with names > 8 characters
-#########
-	for t in range(spss.GetVariableCount()):
-		if (len(spss.GetVariableName(t)) > 8):
-			name = spss.GetVariableName(t)[0:8]
-			for i in range(spss.GetVariableCount()):
-				compname = spss.GetVariableName(i)[0:8]
-				if (name.lower().replace(".","_") == compname.lower().replace(".","_")):
-					name = "var" + "%05d" %(t+1)
-			submitstring = "rename variables (%s = %s)." %(spss.GetVariableName(t), name)
-			spss.Submit(submitstring)
-
 ##########
 # Replace non-alphanumeric characters with _ in the variable names
 ##########
@@ -341,6 +329,18 @@ def exportMplus(filepath):
 				newname = "var" + "%05d" %(t+1)
 		if (oldname != newname):
 			submitstring = "rename variables (%s = %s)." %(oldname, newname)
+			spss.Submit(submitstring)
+#########
+# Rename variables with names > 8 characters
+#########
+ for t in range(spss.GetVariableCount()):
+		if (len(spss.GetVariableName(t)) > 8):
+			name = spss.GetVariableName(t)[0:8]
+			for i in range(spss.GetVariableCount()):
+				compname = spss.GetVariableName(i)
+				if (name.lower() == compname.lower()):
+					name = "var" + "%05d" %(t+1)
+			submitstring = "rename variables (%s = %s)." %(spss.GetVariableName(t), name)
 			spss.Submit(submitstring)
 
 # Obtain lists of variables in the dataset
@@ -1548,4 +1548,4 @@ waittime = 5):
 
 end program python.
 set printback = on.
-COMMENT BOOKMARK;LINE_NUM=315;ID=2.
+COMMENT BOOKMARK;LINE_NUM=1007;ID=1.
