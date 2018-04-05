@@ -33,7 +33,7 @@ This and other SPSS Python Extension functions can be found at http://www.stat-h
 * "datasetLabels" is an optional argument that identifies a list of labels that would be applied to the dataset containing coefficients. This can be useful if you are appending the results from multiple analyses to the same dataset.
 * "waittime" is an optional argument that specifies how many seconds the program should wait after running the Mplus program before it tries to read the output file. This defaults to 5. You should be sure that you leave enough time for Mplus to finish the analyses before trying to import them into SPSS.
 
-##Example 1 - Simple specification
+## Example 1 - Simple specification
 **MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",  
 model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender"] ],  
 cluster = "school")**
@@ -41,7 +41,7 @@ cluster = "school")**
 * All of the exogenous variables (which include Tx, att_ch, yrs_tch, age, and gender) are allowed to freely covary. This is not specified explicitly, but is the default.
 * The model controls for school as a random clustering factor. 
 
-##Example 2 - Full specification
+## Example 2 - Full specification
 **MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",  
 runModel = True,  
 veiwOutput = True,   
