@@ -6,7 +6,7 @@ This program allows users to identify a path model that they want to test on an 
 
 This and other SPSS Python Extension functions can be found at http://www.stat-help.com/python.html
 
-##Usage
+## Usage
 **MplusPathAnalysis(inpfile, runModel, viewOutput, latent, model, covar, covEndo, covExo, useobservations, indirect, identifiers, wald, categorical, censored, count, nominal, cluster, weight, datasetName, datasetLabels, indDatasetName, waittime)**
 * "inpfile" is a string identifying the directory and filename of Mplus input file to be created by the program. This filename must end with .inp . The data file will automatically be saved to the same directory. This argument is required.
 * "runModel" is a boolean argument indicating whether or not you want the program to actually run the program it creates based on the model you define. You may choose to not run the model when you want to use the program to load an existing output file into SPSS. However, when doing this, you should first load the corresponding data set so that the function can determine the appropriate translation between the Mplus variable names and SPSS variable names. By default, the model is run.
