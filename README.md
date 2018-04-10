@@ -95,7 +95,7 @@ waittime = 10)**
 * All modification indices that are greater than 4 will be reported in the output.
 * The program will wait 10 seconds after starting to run the Mplus program before it tries  to read the results back into SPSS.
 
-##Example 3 - Only reading output
+## Example 3 - Only reading output
 **MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",  
 runModel = False,  
 model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender"] ],  
