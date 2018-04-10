@@ -74,8 +74,8 @@ weight = "demoweight",
 auxiliary = ["grade", "FRLper"],  
 datasetName = "CLASS",  
 indDatasetName = "CLASSind",  
-datasetLabels = ["CLASS", "Mediation"],
-miThreshold = 4,
+datasetLabels = ["CLASS", "Mediation"],  
+miThreshold = 4,  
 waittime = 10)**
 * This would test a model where a Treatment (Tx) is expected to affect attitudes towrd children (att_ch), which in turn is related to be related to three measures assessing classroom interactions (CO, ES, and IS). Years of experience teaching (yrs_tch), teacher age (age), and teacher gender (gender) are included as covariates in all of the models.  Treatment is included as a covariate in the models predicting classroom interactions so that the model can be used to accurately estimate the mediated effect. 
 * The program will both run the model and load the program into SPSS.
