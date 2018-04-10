@@ -128,6 +128,9 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * labels that would be applied to the datasets containing coefficients or
 * tests of the indirect effects. This can be useful if you are appending 
 * the results from multiple analyses to the same dataset.
+**** "miThreshold" is an optional argument that identifies the
+* minimum chi-square change required for a modificiation index
+* to be reported. Omitting this argument uses a default of 10.
 **** "waittime" is an optional argument that specifies how many seconds
 * the program should wait after running the Mplus program before it 
 * tries to read the output file. This defaults to 5. You should be sure that
@@ -167,7 +170,8 @@ weight = "demoweight",
 auxiliary = ["grade", "FRLper"],
 datasetName = "CLASS",
 indDatasetName = "CLASSind",
-datasetLabels = ["CLASS", "Mediation"]
+datasetLabels = ["CLASS", "Mediation"],
+miThreshold = 4,
 waittime = 10)
 * This would test a model where a Treatment (Tx) is expected to affect 
 * attitudes towrd children (att_ch), which in turn is related to be related
@@ -200,7 +204,8 @@ waittime = 10)
 * "CLASSind". Each of these datasets will have 
 * two variables containing labels. All of the results from this run of the 
 * program would have the values of "CLASS" and "Mediation" for these
-* two variables. The program will wait 10 seconds after starting to 
+* two variables. All modification indices that are greater than 4 will be
+* reported in the output. The program will wait 10 seconds after starting to 
 * run the Mplus program before it tries  to read the results back into SPSS.
 
 ************
@@ -262,6 +267,7 @@ categorical, censored, count, nominal
 * 2016-02-09 Replaced variable names in indirect data set
 * 2016-02-10 Removed debugging code
 * 2016-09-28 Replaced nonalphanumerics before checking for duplicate variable names
+* 2018-04-10 Added mithreshold argument
 
 set printback = off.
 begin program python.
@@ -1282,7 +1288,7 @@ useobservations = None, indirect = None, identifiers = None, wald = None,
 categorical = None, censored = None, count = None, nominal = None,
 cluster = None, weight = None, auxiliary = None, 
 datasetName = None, indDatasetName = None, datasetLabels = [], 
-waittime = 5):
+miThreshold = 10, waittime = 5):
 
     spss.Submit("display scratch.")
 
@@ -1495,7 +1501,7 @@ waittime = 5):
             pathProgram.setAnalysis(MplusCluster)
             pathProgram.setModel(MplusLatent, MplusModel, MplusCovar, 
     covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
-            pathProgram.setOutput("stdyx;\nmodindices;")
+            pathProgram.setOutput("stdyx;\nmodindices({0});".format(miThreshold))
             pathProgram.write(outdir + fname + ".inp")
 
 # Add latent variables to SPSSvariables lists
@@ -1548,4 +1554,3 @@ waittime = 5):
 
 end program python.
 set printback = on.
-COMMENT BOOKMARK;LINE_NUM=1007;ID=1.
