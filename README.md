@@ -1,4 +1,4 @@
-#MplusPathAnalysis
+# MplusPathAnalysis
 
 SPSS Python Extension function to use Mplus to run a path analysis from within SPSS
 
@@ -6,7 +6,7 @@ This program allows users to identify a path model that they want to test on an 
 
 This and other SPSS Python Extension functions can be found at http://www.stat-help.com/python.html
 
-##Usage
+## Usage
 **MplusPathAnalysis(inpfile, runModel, viewOutput, latent, model, covar, covEndo, covExo, useobservations, indirect, identifiers, wald, categorical, censored, count, nominal, cluster, weight, datasetName, datasetLabels, indDatasetName, waittime)**
 * "inpfile" is a string identifying the directory and filename of Mplus input file to be created by the program. This filename must end with .inp . The data file will automatically be saved to the same directory. This argument is required.
 * "runModel" is a boolean argument indicating whether or not you want the program to actually run the program it creates based on the model you define. You may choose to not run the model when you want to use the program to load an existing output file into SPSS. However, when doing this, you should first load the corresponding data set so that the function can determine the appropriate translation between the Mplus variable names and SPSS variable names. By default, the model is run.
@@ -33,7 +33,7 @@ This and other SPSS Python Extension functions can be found at http://www.stat-h
 * "datasetLabels" is an optional argument that identifies a list of labels that would be applied to the dataset containing coefficients. This can be useful if you are appending the results from multiple analyses to the same dataset.
 * "waittime" is an optional argument that specifies how many seconds the program should wait after running the Mplus program before it tries to read the output file. This defaults to 5. You should be sure that you leave enough time for Mplus to finish the analyses before trying to import them into SPSS.
 
-##Example 1 - Simple specification
+## Example 1 - Simple specification
 **MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",  
 model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender"] ],  
 cluster = "school")**
@@ -41,7 +41,7 @@ cluster = "school")**
 * All of the exogenous variables (which include Tx, att_ch, yrs_tch, age, and gender) are allowed to freely covary. This is not specified explicitly, but is the default.
 * The model controls for school as a random clustering factor. 
 
-##Example 2 - Full specification
+## Example 2 - Full specification
 **MplusPathAnalysis(inpfile = "C:/users/jamie/workspace/spssmplus/path.inp",  
 runModel = True,  
 veiwOutput = True,   
