@@ -268,11 +268,44 @@ categorical, censored, count, nominal
 * 2016-02-10 Removed debugging code
 * 2016-09-28 Replaced nonalphanumerics before checking for duplicate variable names
 * 2018-04-10 Added mithreshold argument
+* 2018-04-18 Added titleToPane function
+* 2018-10-02 Changed runModel so that it still creates the inp file
 
 set printback = off.
 begin program python.
-import spss, spssaux, os, time, re
+import spss, spssaux, os, sys, time, re, tempfile, SpssClient
 from subprocess import Popen, PIPE
+
+def _titleToPane():
+    """See titleToPane(). This function does the actual job"""
+    outputDoc = SpssClient.GetDesignatedOutputDoc()
+    outputItemList = outputDoc.GetOutputItems()
+    textFormat = SpssClient.DocExportFormat.SpssFormatText
+    filename = tempfile.mktemp() + ".txt"
+    for index in range(outputItemList.Size()):
+        outputItem = outputItemList.GetItemAt(index)
+        if outputItem.GetDescription() == u"Page Title":
+            outputItem.ExportToDocument(filename, textFormat)
+            with open(filename) as f:
+                outputItem.SetDescription(f.read().rstrip())
+            os.remove(filename)
+    return outputDoc
+
+def titleToPane(spv=None):
+    """Copy the contents of the TITLE command of the designated output document
+    to the left output viewer pane"""
+    try:
+        outputDoc = None
+        SpssClient.StartClient()
+        if spv:
+            SpssClient.OpenOutputDoc(spv)
+        outputDoc = _titleToPane()
+        if spv and outputDoc:
+            outputDoc.SaveAs(spv)
+    except:
+        print "Error filling TITLE in Output Viewer [%s]" % sys.exc_info()[1]
+    finally:
+        SpssClient.StopClient()
 
 def MplusSplit(splitstring, linelength):
     returnstring = ""
@@ -1374,135 +1407,134 @@ miThreshold = 10, waittime = 5):
         dataname = outdir + fname + ".dat"
         MplusVariables = exportMplus(dataname)
 
-        if (runModel == True):
-    # Define latent variables using Mplus variables
-            if (latent == None):
-                MplusLatent = None
+# Define latent variables using Mplus variables
+        if (latent == None):
+            MplusLatent = None
+        else:
+            MplusLatent = []
+            for t in latent:
+                MplusLatent.append([i.upper() for i in t])
+            for t in range(len(MplusLatent)):
+                for i in range(len(MplusLatent[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (MplusLatent[t][i] == s):
+                            MplusLatent[t][i] = m
+
+# Define model using Mplus variables
+        if (model == None):
+            MplusModel = None
+        else:
+            MplusModel = []
+            for t in model:
+                MplusModel.append([i.upper() for i in t])
+            for t in range(len(MplusModel)):
+                for i in range(len(MplusModel[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (MplusModel[t][i] == s):
+                            MplusModel[t][i] = m
+
+# Convert variables in covariance list to Mplus
+        if (covar == None):
+            MplusCovar = None
+        else:
+            MplusCovar = []
+            for t in covar:
+                MplusCovar.append([i.upper() for i in t])
+            for t in range(len(MplusCovar)):
+                for i in range(2):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (MplusCovar[t][i] == s):
+                            MplusCovar[t][i] = m
+
+# Define indirect effects using Mplus variables
+        if (indirect == None):
+            MplusIndirect = None
+        else:
+            MplusIndirect = []
+            for t in indirect:
+                MplusIndirect.append([i.upper() for i in t])
+            for t in range(len(MplusIndirect)):
+                for i in range(len(MplusIndirect[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (MplusIndirect[t][i] == s):
+                            MplusIndirect[t][i] = m
+
+# Convert identifiers to Mplus
+        if (identifiers == None):
+            MplusIdentifiers = None
+        else:
+            MplusIdentifiers = []
+            idEquations = []
+            for t in identifiers:
+                j = []
+                for i in t[0]:
+                    j.append(i.upper())
+                idEquations.append(j)
+            for t in range(len(idEquations)):
+                for i in range(len(idEquations[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (idEquations[t][i] == s):
+                            idEquations[t][i] = m
+                MplusIdentifiers.append([idEquations[t], identifiers[t][1]])
+
+# Convert useobservations to Mplus
+        if (useobservations == None):
+            MplusUseobservations = None
+        else:
+            MplusUseobservations = useobservations
+            for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                z = re.compile(s, re.IGNORECASE)
+                MplusUseobservations = z.sub(m, MplusUseobservations)
+
+# Convert cluster variable to Mplus
+        if (cluster == None):
+            MplusCluster = None
+        else:
+            for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                if (cluster.upper() == s):
+                    MplusCluster = m
+
+# Convert variable list arguments to Mplus
+        lvarList = [auxiliary, categorical, censored, count, nominal]
+        MplusAuxiliary = []
+        MplusCategorical = []
+        MplusCensored = []
+        MplusCount = []
+        MplusNominal = []
+        lvarMplusList = [MplusAuxiliary, MplusCategorical, MplusCensored,
+MplusCount, MplusNominal]
+        for t in range(len(lvarList)):
+            if (lvarList[t] == None):
+                lvarMplusList[t] = None
             else:
-                MplusLatent = []
-                for t in latent:
-                    MplusLatent.append([i.upper() for i in t])
-                for t in range(len(MplusLatent)):
-                    for i in range(len(MplusLatent[t])):
-                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                            if (MplusLatent[t][i] == s):
-                                MplusLatent[t][i] = m
+                for i in lvarList[t]:
+                    lvarMplusList[t].append(i.upper())
+                for i in range(len(lvarMplusList[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (lvarMplusList[t][i] == s):
+                            lvarMplusList[t][i] = m
 
-    # Define model using Mplus variables
-            if (model == None):
-                MplusModel = None
-            else:
-                MplusModel = []
-                for t in model:
-                    MplusModel.append([i.upper() for i in t])
-                for t in range(len(MplusModel)):
-                    for i in range(len(MplusModel[t])):
-                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                            if (MplusModel[t][i] == s):
-                                MplusModel[t][i] = m
+# Convert weight variable to Mplus
+        if (weight == None):
+            MplusWeight = None
+        else:
+            for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                if (weight.upper() == s):
+                    MplusWeight = m
 
-    # Convert variables in covariance list to Mplus
-            if (covar == None):
-                MplusCovar = None
-            else:
-                MplusCovar = []
-                for t in covar:
-                    MplusCovar.append([i.upper() for i in t])
-                for t in range(len(MplusCovar)):
-                    for i in range(2):
-                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                            if (MplusCovar[t][i] == s):
-                                MplusCovar[t][i] = m
-
-    # Define indirect effects using Mplus variables
-            if (indirect == None):
-                MplusIndirect = None
-            else:
-                MplusIndirect = []
-                for t in indirect:
-                    MplusIndirect.append([i.upper() for i in t])
-                for t in range(len(MplusIndirect)):
-                    for i in range(len(MplusIndirect[t])):
-                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                            if (MplusIndirect[t][i] == s):
-                                MplusIndirect[t][i] = m
-
-    # Convert identifiers to Mplus
-            if (identifiers == None):
-                MplusIdentifiers = None
-            else:
-                MplusIdentifiers = []
-                idEquations = []
-                for t in identifiers:
-                    j = []
-                    for i in t[0]:
-                        j.append(i.upper())
-                    idEquations.append(j)
-                for t in range(len(idEquations)):
-                    for i in range(len(idEquations[t])):
-                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                            if (idEquations[t][i] == s):
-                                idEquations[t][i] = m
-                    MplusIdentifiers.append([idEquations[t], identifiers[t][1]])
-
-    # Convert useobservations to Mplus
-            if (useobservations == None):
-                MplusUseobservations = None
-            else:
-                MplusUseobservations = useobservations
-                for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                    z = re.compile(s, re.IGNORECASE)
-                    MplusUseobservations = z.sub(m, MplusUseobservations)
-
-    # Convert cluster variable to Mplus
-            if (cluster == None):
-                MplusCluster = None
-            else:
-                for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                    if (cluster.upper() == s):
-                        MplusCluster = m
-
-    # Convert variable list arguments to Mplus
-            lvarList = [auxiliary, categorical, censored, count, nominal]
-            MplusAuxiliary = []
-            MplusCategorical = []
-            MplusCensored = []
-            MplusCount = []
-            MplusNominal = []
-            lvarMplusList = [MplusAuxiliary, MplusCategorical, MplusCensored,
-    MplusCount, MplusNominal]
-            for t in range(len(lvarList)):
-                if (lvarList[t] == None):
-                    lvarMplusList[t] = None
-                else:
-                    for i in lvarList[t]:
-                        lvarMplusList[t].append(i.upper())
-                    for i in range(len(lvarMplusList[t])):
-                        for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                            if (lvarMplusList[t][i] == s):
-                                lvarMplusList[t][i] = m
-
-    # Convert weight variable to Mplus
-            if (weight == None):
-                MplusWeight = None
-            else:
-                for s, m in zip(SPSSvariablesCaps, MplusVariables):
-                    if (weight.upper() == s):
-                        MplusWeight = m
-
-    # Create input program
-            pathProgram = MplusPAprogram()
-            pathProgram.setTitle("Created by MplusPathAnalysis")
-            pathProgram.setData(dataname)
-            pathProgram.setVariable(MplusVariables, MplusLatent, MplusModel, 
-    MplusUseobservations,
-    MplusCategorical, MplusCensored, MplusCount, MplusNominal,
-    MplusCluster, MplusWeight, MplusAuxiliary)
-            pathProgram.setAnalysis(MplusCluster)
-            pathProgram.setModel(MplusLatent, MplusModel, MplusCovar, 
-    covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
-            pathProgram.setOutput("stdyx;\nmodindices({0});".format(miThreshold))
-            pathProgram.write(outdir + fname + ".inp")
+# Create input program
+        pathProgram = MplusPAprogram()
+        pathProgram.setTitle("Created by MplusPathAnalysis")
+        pathProgram.setData(dataname)
+        pathProgram.setVariable(MplusVariables, MplusLatent, MplusModel, 
+MplusUseobservations,
+MplusCategorical, MplusCensored, MplusCount, MplusNominal,
+MplusCluster, MplusWeight, MplusAuxiliary)
+        pathProgram.setAnalysis(MplusCluster)
+        pathProgram.setModel(MplusLatent, MplusModel, MplusCovar, 
+covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
+        pathProgram.setOutput("stdyx;\nmodindices({0});".format(miThreshold))
+        pathProgram.write(outdir + fname + ".inp")
 
 # Add latent variables to SPSSvariables lists
         if (latent != None):
@@ -1552,5 +1584,7 @@ miThreshold = 10, waittime = 5):
                 submitstring = """OMSEND TAG = 'NoJunk'."""
                 spss.Submit(submitstring)
 
+# Replace titles
+    titleToPane()
 end program python.
 set printback = on.
