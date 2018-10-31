@@ -9,7 +9,7 @@
 * parts of the Mplus output into the SPSS output window.
 
 **** Usage: MplusPathAnalysis(inpfile, runModel, viewOutput, suppressSPSS,
-latent, model, covar, covEndo, covExo, 
+latent, model, covar, covEndo, covExo, MLR,
 useobservations, indirect, identifiers, wald,
 categorical, censored, count, nominal, cluster, weight, 
 datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
@@ -74,8 +74,12 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * will not, although you can still specify individual covariances between 
 * exogenous variables using the "covar" argument described above.
 * By default, the value for covExo is True.
+**** "MLR" is a boolean indicating whether you would like use the MLR
+* (maximum likelihood with robust standard errors) estimator. By default,
+* the value for mlr is False, meaning that the analysis will be performed
+* using the standard maximum likelihood estimator.
 **** "useobservations" is a string specifying a selection
-* criteriion that must be met for observations to be included in the 
+* criterion that must be met for observations to be included in the 
 * analysis. This is an optional argument that defaults to None, indicating
 * that all observations are to be included in the analysis.
 **** "indirect" is an optional argument that identifies a set of indirect effects
@@ -114,7 +118,8 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * Clustering is handled using Mplus type = complex.
 **** "weight" is an optional argument that identifies a sample weight.
 * This defaults to None, which would indicate that there all observations
-* are given equal weight.
+* are given equal weight. If you use a weight, the analysis will automatically
+* use the MLR estimator.
 **** "auxiliary" is an optional argument that identifies a list of variables
 * that are used to assist with estimating missing values but which are
 * not to be included in the model. This defaults to None, which would
@@ -270,6 +275,8 @@ categorical, censored, count, nominal
 * 2018-04-10 Added mithreshold argument
 * 2018-04-18 Added titleToPane function
 * 2018-10-02 Changed runModel so that it still creates the inp file
+* 2018-10-30 Added MLR command
+    MLR is always used if a weight variable is defined
 
 set printback = off.
 begin program python.
@@ -562,9 +569,11 @@ categorical, censored, count, nominal, cluster, weight, auxiliary):
                     self.variable += var + "\n"
         self.variable += ";\n\nMISSING ARE ALL (-999);"
 
-    def setAnalysis(self, cluster):
+    def setAnalysis(self, cluster, weight, MLR):
         if (cluster != None):
             self.analysis += "type = complex;"
+        if (weight != None or MLR == True):
+            self.analysis += "estimator = MLR;"
 
     def setModel(self, MplusLatent, MplusModel, MplusCovar, 
 cEndo, cExo, MplusIndirect, MplusIdentifiers, wald):
@@ -1316,7 +1325,7 @@ alter type SpecificEffect (f8.0)."""
 
 def MplusPathAnalysis(inpfile, runModel = True, viewOutput = True,
 suppressSPSS = False, latent = None, model = None, covar = None, 
-covEndo = False, covExo = True, 
+covEndo = False, covExo = True, MLR = False,
 useobservations = None, indirect = None, identifiers = None, wald = None,
 categorical = None, censored = None, count = None, nominal = None,
 cluster = None, weight = None, auxiliary = None, 
@@ -1530,7 +1539,7 @@ MplusCount, MplusNominal]
 MplusUseobservations,
 MplusCategorical, MplusCensored, MplusCount, MplusNominal,
 MplusCluster, MplusWeight, MplusAuxiliary)
-        pathProgram.setAnalysis(MplusCluster)
+        pathProgram.setAnalysis(MplusCluster, MplusWeight, MLR)
         pathProgram.setModel(MplusLatent, MplusModel, MplusCovar, 
 covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
         pathProgram.setOutput("stdyx;\nmodindices({0});".format(miThreshold))
