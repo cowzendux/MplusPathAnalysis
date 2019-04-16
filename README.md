@@ -72,8 +72,8 @@ identifiers = [ [ ["CO", "Educ"], "b1"],
 meanIdentifiers = [ ["CO", "COint"] ],  
 wald = [ "b1 = 0", "b2 = 0", "b3 = 0" ],  
 constraint = """loCO = COint + b1*12;  
-&nbsp;&nbsp;&nbsp;&nbsp;medCO = COint + b1*14;  
-&nbsp;&nbsp;&nbsp;&nbsp;hiCO = COint + b1*16;""",  
+&nbsp;&nbsp;&nbsp;&nbsp;medCO = COint + b1 * 14;  
+&nbsp;&nbsp;&nbsp;&nbsp;hiCO = COint + b1 * 16;""",  
 categorical = ["yrs_tch"],  
 censored = None,  
 count = None,  
