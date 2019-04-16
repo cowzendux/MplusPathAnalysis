@@ -9,8 +9,8 @@
 * parts of the Mplus output into the SPSS output window.
 
 **** Usage: MplusPathAnalysis(inpfile, runModel, viewOutput, suppressSPSS,
-latent, model, covar, covEndo, covExo, MLR,
-useobservations, indirect, identifiers, wald,
+latent, model, means, covar, covEndo, covExo, MLR,
+useobservations, indirect, identifiers, meanIdentifiers, wald, constraint,
 categorical, censored, count, nominal, cluster, weight, 
 datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 **** "inpfile" is a string identifying the directory and filename of
@@ -49,6 +49,8 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * Then you combine these individual equation lists 
 * into a larger list identifying the entire path model. You can omit this argument
 * if you are performing a CFA and don't have any structural equations.
+**** "means" is a list of variables indicating which means you want 
+* estimated in the model. 
 **** "covar" is a list of lists identifying covariances with endogenous variables. 
 * First, you create a set of lists that identify pairs of variables that are allowed 
 * to covary. Then you combine these lists of pairs into a single, overall list. 
@@ -91,10 +93,15 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * This argument defaults to None, which would indicate that 
 * you do not want to test indirect effects.
 **** "identifiers" is an optional argument provides a list of lists pairing 
-* coefficients with identifiers that will be used as part of a Wald Z test. The 
+* coefficients with identifiers that will be used as part of a Wald Z test or
+* a Model Constraint calculation. The 
 * coefficients part must specifically match a list in the "model" statement.
 * To do this, you may need to separate the predictors for a single outcome 
 * into different lists. This defaults to None, which does not assign any identifiers. 
+**** "meanIdentifiers" is an optional argument that provides a list of lists
+* pairing variables with identifiers that will be used as part of a Wald Z test
+* or a Model Constraint calculation. This defaults to None, which does not
+* assign any identifiers for means.
 **** "wald" is an optional argument that identifies a list of constraints that
 * will be tested using a Wald Z test. The constraints will be definted using the
 * identifiers specified in the "identifiers" argument. This can be used 
@@ -102,6 +109,9 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * can be used to test the equivalence of different coefficients. This argument 
 * defaults to None, which would indicate that you do not want to perform 
 * a Wald Z test.
+**** "constraint" is an optional argument that identifies a string
+* to be included in the Model Constraint section, allowing you to estimate
+* linear combinations of means and coefficients from your model. 
 **** "categorical" is an optional argument that identifies a list of variables
 * that should be treated as categorical by Mplus. Note that what Mplus
 * calls categorical is typically called "ordinal" in other places. Use the
@@ -151,6 +161,7 @@ latent = [ ["CHLATENT", "chincome_mean", "chfrl_mean", "chmomed_mean"] ],
 model = [ ["att_ch", "Tx", "yrs_tch", "age", "gender", "CHLATENT"], 
 ["CO", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"],
 ["CO", "Educ"],
+means = ["CO"],
 ["ES", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"],
 ["ES", "Educ"],
 ["IS", "Tx", "att_ch", "yrs_tch", "age", "gender", "CHLATENT"] 
@@ -165,7 +176,11 @@ indirect = [ ["CO", "att_ch", "Tx"],
 identifiers = [ [ ["CO", "Educ"], "b1"],
 [ ["ES", "Educ"], "b2"],
 [ ["IS", "Educ"], "b3"] ],
+meanIdentifiers = [ ["CO", "COint"] ],
 wald = [ "b1 = 0", "b2 = 0", "b3 = 0" ],
+constraint = """loCO = COint + b1*12;
+medCO = COint + b1*14;
+hiCO = COint + b1*16;""",
 categorical = ["yrs_tch"],
 censored = None,
 count = None,
@@ -187,7 +202,7 @@ waittime = 10)
 * gender (gender) are included as covariates in all of the models. 
 * Treatment is included as a covariate in the models predicting classroom
 * interactions so that the model can be used to accurately estimate the
-* mediated effect. CO is allowed to covary with both ES and IS.
+* mediated effect. The mean of CO is estimated. CO is allowed to covary with both ES and IS.
 * The endogenous variables (which include CO, ES, and IS) are not
 * automatically allowed to covary, although two specific covariances
 * are allowed (CO with ES and CO with IS) as mentioned above. All of the 
@@ -197,6 +212,8 @@ waittime = 10)
 * of Tx on each of the three outcomes (CO, ES, IS) through att_ch.
 * The model will use a Wald Z test to perform an omnibus test that the 
 * Educ does not have any influence on any of the three outcomes (CO, ES, IS).
+* A estimates are being made of the value of CO when eduction is low
+* (12 years), medium (14 years), or high (16 years).
 * Yrs_tch is treated as a categorical variable, 
 * whereas Tx and gender are treated as nominal variables. 
 * The model also controls for school as a random 
@@ -212,71 +229,6 @@ waittime = 10)
 * two variables. All modification indices that are greater than 4 will be
 * reported in the output. The program will wait 10 seconds after starting to 
 * run the Mplus program before it tries  to read the results back into SPSS.
-
-************
-* Version History
-************
-* 2013-09-07 Created
-* 2013-09-08 Reordered variables in current data set after
-exporting file to Mplus
-* 2013-09-09 Fixed missing semicolon in usevariables
-    Added 2 sec delay before opening output to give the computer a chance
-to save the file.
-* 2013-09-12 Converted cluster variable name
-* 2013-09-12a Made classes program-specific
-* 2013-09-12b Added specification of covariances
-* 2013-09-13 Removed effects of capitalization
-    Used leading zeroes in renamed variable names
-* 2013-09-14 Limited length of exogenous with statements to 75 chars
-* 2013-09-14a Program changes variable names back to their original values
-after exporting the data set to Mplus
-    Fixed an error dropping a variable when equations went over a line
-* 2013-09-15 Can read output from models that do not converge
-    Added waittime argument
-* 2013-12-29 Fixed formatting of coefficients
-* 2013-12-31 Separated coefficients, covariances, and 
-    descriptives in output
-* 2014-01-02 Added weight parameter
-* 2014-01-06 Added covEndo and covExo parameters
-* 2014-01-07 Reloaded original data file after analysis
-* 2014-01-26 Added auxiliary parameter
-* 2014-01-29 Removed extra ;
-* 2014-02-10 Handles output without Standardized coefficients
-* 2014-03-13 Replaces all nonalphanumeric chars in variable names with _
-* 2014-03-13a Allows specification of nonnormal variable types:
-categorical, censored, count, nominal
-* 2014-03-17 No longer reloads original data file
-* 2014-03-26 Added missing value statements to original data set
-* 2014-03-27 Added options to save coefficients in a dataset
-* 2014-03-29 Changed coefficient variable types to f8.3
-* 2014-05-15 Changed default for datasetLabels to []
-* 2014-05-27 Corrected error when covExo = False
-* 2014-06-22 Added option to perform indirect tests
-* 2014-06-23 Replaced headers in indirect section
-* 2014-06-23a to 2014-06-24 Added option to save indirect tests to a dataset
-* 2014-07-09 Added option for Wald Z omnibus test
-* 2014-08-15 Added useobservations argument
-    No longer prints auxiliary code when argument omitted
-* 2014-08-18 Added support for latent variables
-* 2014-08-19 Finished implementation of latent variables
-* 2014-08-19a Renamed covEndo and covExo arguments
-    Fixed documentation
-* 2014-08-28 Corrected presentation of latent variables in output
-* 2014-09-07 Added runModel and viewOutput arguments
-* 2014-11-09 Corrected error when checking model
-* 2015-01-19 Suppressed SPSS output
-* 2015-02-20 Fixed error with missing indirect output
-    Added toggle to suppress or not suppress SPSS output
-* 2016-02-06 Corrected error when there are no coefficients to extract
-* 2016-02-08 When a variable is missing from the data set, that variable is printed
-* 2016-02-09 Replaced variable names in indirect data set
-* 2016-02-10 Removed debugging code
-* 2016-09-28 Replaced nonalphanumerics before checking for duplicate variable names
-* 2018-04-10 Added mithreshold argument
-* 2018-04-18 Added titleToPane function
-* 2018-10-02 Changed runModel so that it still creates the inp file
-* 2018-10-30 Added MLR command
-    MLR is always used if a weight variable is defined
 
 set printback = off.
 begin program python.
@@ -510,6 +462,7 @@ class MplusPAprogram:
         self.define = "DEFINE:\n"
         self.analysis = "ANALYSIS:\n"
         self.model = "MODEL:\n"
+        self.constraint = "MODEL CONSTRAINT:\n"
         self.output = "OUTPUT:\n"
         self.savedata = "SAVEDATA:\n"
         self.plot = "PLOT:\n"
@@ -575,8 +528,8 @@ categorical, censored, count, nominal, cluster, weight, auxiliary):
         if (weight != None or MLR == True):
             self.analysis += "estimator = MLR;"
 
-    def setModel(self, MplusLatent, MplusModel, MplusCovar, 
-cEndo, cExo, MplusIndirect, MplusIdentifiers, wald):
+    def setModel(self, MplusLatent, MplusModel, MplusMeans, MplusCovar, 
+cEndo, cExo, MplusIndirect, MplusIdentifiers, MplusMeanIdentifiers, wald):
 # Latent variable definitions
         if (MplusLatent != None):
             for equation in MplusLatent:
@@ -602,6 +555,16 @@ cEndo, cExo, MplusIndirect, MplusIdentifiers, wald):
                 if (MplusIdentifiers != None):
                     for id in MplusIdentifiers:
                         if (equation == id[0]):
+                            curline += " (" + id[1] + ")"
+                self.model += curline + ";\n"
+
+# Means
+        if (MplusMeans != None):
+            for m in MplusMeans:
+                curline = "[" + m + "]"
+                if (MplusMeanIdentifiers != None):
+                    for id in MplusMeanIdentifiers:
+                         if (m == id[0]):
                             curline += " (" + id[1] + ")"
                 self.model += curline + ";\n"
 
@@ -676,13 +639,17 @@ cEndo, cExo, MplusIndirect, MplusIdentifiers, wald):
             for line in wald:
                 self.model += "\n" + line + ";"
 
+    def setConstraint(self, constraintText):
+        if (constraintText != None):
+            self.constraint +="\n" + constraintText
+
     def setOutput(self, outputText):
         self.output += outputText
 
     def write(self, filename):
 # Write input file
         sectionList = [self.title, self.data, self.variable, self.define,
-self.analysis, self.model, self.output, self.savedata, 
+self.analysis, self.model, self.constraint, self.output, self.savedata, 
 self.plot, self.montecarlo]
         outfile = open(filename, "w")
         for sec in sectionList:
@@ -800,6 +767,7 @@ class MplusPAoutput:
         self.coefficients = None
         self.covariances = None
         self.descriptives = None
+        self.newParam = None
         self.Zmeasurement = None
         self.Zcoefficients = None
         self.Zcovariances = None
@@ -900,11 +868,23 @@ class MplusPAoutput:
         start = end
         for t in range(start, len(outputList)):
             if ("STANDARDIZED MODEL RESULTS" in outputList[t] or
-"MODEL COMMAND" in outputList[t]):
+"MODEL COMMAND" in outputList[t] or
+"New/Additional Parameters" in outputList[t]):
                 end = t
                 break
         self.descriptives = "\n".join(outputList[start:end])
         self.descriptives = removeBlanks(self.descriptives)
+
+# New parameters
+        start = end
+        if ("New/Additional Parameters" in outputList[start]):
+            for t in range(start, len(outputList)):
+                if ("STANDARDIZED MODEL RESULTS" in outputList[t] or
+    "MODEL COMMAND" in outputList[t]):
+                    end = t
+                    break
+            self.newParam = "\n".join(outputList[start:end])
+            self.newParam = removeBlanks(self.newParam)
 
 # Standardized measurement model
         if ("MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings):
@@ -1060,6 +1040,16 @@ or "MODIFICATION" in outputList[t]):
                 self.Zindirect = self.Zindirect.replace(var1.upper(), var2)
                 self.Zindirect = re.sub(r"\b"+var1.upper().strip()+r"\b", r"\b"+var2.strip() + r"\b", self.Zindirect)
 
+# New parameters section
+        if (self.newParam != None):
+            newNP = ["New/Additional Parameters"]
+            npLines = self.newParam.split("\n")
+            for line in npLines[1:]:
+                if (len(line) > 1):
+                    firstWord = line.split()[0]
+                    line = line.replace(firstWord, firstWord + " "*15)
+                    newNP.append(line)
+            self.newParam = "\n".join(newNP)    
 # R2 section
         if (self.r2 != None):
             self.r2 = self.r2.replace("Variable        Estimate       S.E.  Est./S.E.    P-Value", 
@@ -1146,6 +1136,10 @@ in self.warnings)):
         print "Unstandardized"
         print self.header
         print self.descriptives
+        if (self.newParam != None):
+            spss.Submit("title 'NEW/ADDITIONAL PARAMETERS'.")
+            print self.header
+            print self.newParam
 
         if (self.Zmeasurement != None):
             spss.Submit("title 'STANDARDIZED MEASUREMENT MODEL'.")
@@ -1324,9 +1318,10 @@ alter type SpecificEffect (f8.0)."""
         spss.EndDataStep()
 
 def MplusPathAnalysis(inpfile, runModel = True, viewOutput = True,
-suppressSPSS = False, latent = None, model = None, covar = None, 
-covEndo = False, covExo = True, MLR = False,
-useobservations = None, indirect = None, identifiers = None, wald = None,
+suppressSPSS = False, latent = None, model = None, means = None,
+covar = None, covEndo = False, covExo = True, MLR = False,
+useobservations = None, indirect = None, identifiers = None, 
+meanIdentifiers = None, wald = None, constraint = None,
 categorical = None, censored = None, count = None, nominal = None,
 cluster = None, weight = None, auxiliary = None, 
 datasetName = None, indDatasetName = None, datasetLabels = [], 
@@ -1486,6 +1481,20 @@ miThreshold = 10, waittime = 5):
                             idEquations[t][i] = m
                 MplusIdentifiers.append([idEquations[t], identifiers[t][1]])
 
+# Convert mean identifiers to Mplus
+        if (meanIdentifiers == None):
+            MplusMeanIdentifiers = None
+        else:
+            MplusMeanIdentifiers = []
+            idMeans = []
+            for t in meanIdentifiers:
+                idMeans.append(t[0].upper())
+            for t in range(len(idMeans)):
+                for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                    if (idMeans[t] == s):
+                        idMeans[t] = m
+                MplusMeanIdentifiers.append([idMeans[t], meanIdentifiers[t][1]])
+
 # Convert useobservations to Mplus
         if (useobservations == None):
             MplusUseobservations = None
@@ -1504,14 +1513,15 @@ miThreshold = 10, waittime = 5):
                     MplusCluster = m
 
 # Convert variable list arguments to Mplus
-        lvarList = [auxiliary, categorical, censored, count, nominal]
+        lvarList = [means, auxiliary, categorical, censored, count, nominal]
+        MplusMeans = []
         MplusAuxiliary = []
         MplusCategorical = []
         MplusCensored = []
         MplusCount = []
         MplusNominal = []
-        lvarMplusList = [MplusAuxiliary, MplusCategorical, MplusCensored,
-MplusCount, MplusNominal]
+        lvarMplusList = [MplusMeans, MplusAuxiliary, MplusCategorical, 
+MplusCensored, MplusCount, MplusNominal]
         for t in range(len(lvarList)):
             if (lvarList[t] == None):
                 lvarMplusList[t] = None
@@ -1540,8 +1550,10 @@ MplusUseobservations,
 MplusCategorical, MplusCensored, MplusCount, MplusNominal,
 MplusCluster, MplusWeight, MplusAuxiliary)
         pathProgram.setAnalysis(MplusCluster, MplusWeight, MLR)
-        pathProgram.setModel(MplusLatent, MplusModel, MplusCovar, 
-covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
+        pathProgram.setModel(MplusLatent, MplusModel, MplusMeans,
+MplusCovar, covEndo, covExo, MplusIndirect, MplusIdentifiers, 
+MplusMeanIdentifiers, wald)
+        pathProgram.setConstraint(constraint)
         pathProgram.setOutput("stdyx;\nmodindices({0});".format(miThreshold))
         pathProgram.write(outdir + fname + ".inp")
 
@@ -1596,4 +1608,75 @@ covEndo, covExo, MplusIndirect, MplusIdentifiers, wald)
 # Replace titles
     titleToPane()
 end program python.
+
+************
+* Version History
+************
+* 2013-09-07 Created
+* 2013-09-08 Reordered variables in current data set after
+exporting file to Mplus
+* 2013-09-09 Fixed missing semicolon in usevariables
+    Added 2 sec delay before opening output to give the computer a chance
+to save the file.
+* 2013-09-12 Converted cluster variable name
+* 2013-09-12a Made classes program-specific
+* 2013-09-12b Added specification of covariances
+* 2013-09-13 Removed effects of capitalization
+    Used leading zeroes in renamed variable names
+* 2013-09-14 Limited length of exogenous with statements to 75 chars
+* 2013-09-14a Program changes variable names back to their original values
+after exporting the data set to Mplus
+    Fixed an error dropping a variable when equations went over a line
+* 2013-09-15 Can read output from models that do not converge
+    Added waittime argument
+* 2013-12-29 Fixed formatting of coefficients
+* 2013-12-31 Separated coefficients, covariances, and 
+    descriptives in output
+* 2014-01-02 Added weight parameter
+* 2014-01-06 Added covEndo and covExo parameters
+* 2014-01-07 Reloaded original data file after analysis
+* 2014-01-26 Added auxiliary parameter
+* 2014-01-29 Removed extra ;
+* 2014-02-10 Handles output without Standardized coefficients
+* 2014-03-13 Replaces all nonalphanumeric chars in variable names with _
+* 2014-03-13a Allows specification of nonnormal variable types:
+categorical, censored, count, nominal
+* 2014-03-17 No longer reloads original data file
+* 2014-03-26 Added missing value statements to original data set
+* 2014-03-27 Added options to save coefficients in a dataset
+* 2014-03-29 Changed coefficient variable types to f8.3
+* 2014-05-15 Changed default for datasetLabels to []
+* 2014-05-27 Corrected error when covExo = False
+* 2014-06-22 Added option to perform indirect tests
+* 2014-06-23 Replaced headers in indirect section
+* 2014-06-23a to 2014-06-24 Added option to save indirect tests to a dataset
+* 2014-07-09 Added option for Wald Z omnibus test
+* 2014-08-15 Added useobservations argument
+    No longer prints auxiliary code when argument omitted
+* 2014-08-18 Added support for latent variables
+* 2014-08-19 Finished implementation of latent variables
+* 2014-08-19a Renamed covEndo and covExo arguments
+    Fixed documentation
+* 2014-08-28 Corrected presentation of latent variables in output
+* 2014-09-07 Added runModel and viewOutput arguments
+* 2014-11-09 Corrected error when checking model
+* 2015-01-19 Suppressed SPSS output
+* 2015-02-20 Fixed error with missing indirect output
+    Added toggle to suppress or not suppress SPSS output
+* 2016-02-06 Corrected error when there are no coefficients to extract
+* 2016-02-08 When a variable is missing from the data set, that variable is printed
+* 2016-02-09 Replaced variable names in indirect data set
+* 2016-02-10 Removed debugging code
+* 2016-09-28 Replaced nonalphanumerics before checking for duplicate variable names
+* 2018-04-10 Added mithreshold argument
+* 2018-04-18 Added titleToPane function
+* 2018-10-02 Changed runModel so that it still creates the inp file
+* 2018-10-30 Added MLR command
+    MLR is always used if a weight variable is defined
+* 2019-04-14 Added constraint option
+* 2019-04-14a Added means and meanIdentifiers options
+* 2019-04-15 Added new parameters section to output
+
 set printback = on.
+
+
