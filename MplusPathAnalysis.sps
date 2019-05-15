@@ -1,4 +1,5 @@
 * Encoding: UTF-8.
+* Encoding: .
 * Use Mplus to run a Path Analysis from within SPSS
 * By Jamie DeCoster
 
@@ -9,7 +10,7 @@
 * parts of the Mplus output into the SPSS output window.
 
 **** Usage: MplusPathAnalysis(inpfile, runModel, viewOutput, suppressSPSS,
-latent, model, means, covar, covEndo, covExo, MLR,
+latent, model, xwith, means, covar, covEndo, covExo, MLR,
 useobservations, indirect, identifiers, meanIdentifiers, wald, constraint,
 categorical, censored, count, nominal, cluster, weight, 
 datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
@@ -49,6 +50,9 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * Then you combine these individual equation lists 
 * into a larger list identifying the entire path model. You can omit this argument
 * if you are performing a CFA and don't have any structural equations.
+**** "xwith" is a list of lists identifying a set of interactions between latent 
+* variables. The first element of each list is the name of the interaction that
+* you want to create. The next two elements define the variables in the interaction.
 **** "means" is a list of variables indicating which means you want 
 * estimated in the model. 
 **** "covar" is a list of lists identifying covariances with endogenous variables. 
@@ -101,7 +105,7 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 **** "meanIdentifiers" is an optional argument that provides a list of lists
 * pairing variables with identifiers that will be used as part of a Wald Z test
 * or a Model Constraint calculation. This defaults to None, which does not
-* assign any identifiers for means.
+* assign any identifiers.
 **** "wald" is an optional argument that identifies a list of constraints that
 * will be tested using a Wald Z test. The constraints will be definted using the
 * identifiers specified in the "identifiers" argument. This can be used 
@@ -476,7 +480,7 @@ class MplusPAprogram:
         splitName = MplusSplit(filename, 75)
         self.data += "'" + splitName + "';"
 
-    def setVariable(self, fullList, latent, model, useobservations, 
+    def setVariable(self, fullList, latent, model, xwith, useobservations, 
 categorical, censored, count, nominal, cluster, weight, auxiliary):
         self.variable += "Names are\n"
         for var in fullList:
@@ -491,6 +495,12 @@ categorical, censored, count, nominal, cluster, weight, auxiliary):
                 latentName.append(equation[0])
                 for var in equation[1:]:
                     if (var not in useList):
+                        useList.append(var)
+        if (xwith != None):
+            for equation in xwith:
+                latentName.append(equation[0])
+                for var in equation[1:]:
+                    if (var not in useList and var not in latentName):
                         useList.append(var)
         if (model != None):
             for equation in model:
@@ -522,13 +532,20 @@ categorical, censored, count, nominal, cluster, weight, auxiliary):
                     self.variable += var + "\n"
         self.variable += ";\n\nMISSING ARE ALL (-999);"
 
-    def setAnalysis(self, cluster, weight, MLR):
+    def setAnalysis(self, xwith, cluster, weight, MLR):
         if (cluster != None):
-            self.analysis += "type = complex;"
+            self.analysis += "type = complex"
+            if (xwith != None):
+                self.analysis += " random;"
+            else:
+                self.analysis += ";"
+        else:
+            if (xwith != None):
+                self.analysis += "type = random"
         if (weight != None or MLR == True):
             self.analysis += "estimator = MLR;"
 
-    def setModel(self, MplusLatent, MplusModel, MplusMeans, MplusCovar, 
+    def setModel(self, MplusLatent, MplusModel, MplusXwith, MplusMeans, MplusCovar, 
 cEndo, cExo, MplusIndirect, MplusIdentifiers, MplusMeanIdentifiers, wald):
 # Latent variable definitions
         if (MplusLatent != None):
@@ -540,10 +557,18 @@ cEndo, cExo, MplusIndirect, MplusIdentifiers, MplusMeanIdentifiers, wald):
                         else:
                             self.model += curline + "\n"
                             curline = var
-                self.model += curline + ";\n\n"
+                self.model += curline + ";\n"
+
+# Xwith statements
+        if (MplusXwith != None):
+            self.model += "\n"
+            for t in MplusXwith:
+                curline = "{0} | {1} XWITH {2};".format(t[0], t[1], t[2])
+                self.model += curline + "\n"
 
 # Regression equations
         if (MplusModel != None):
+            self.model += "\n"
             for equation in MplusModel:
                 curline = equation[0] + " on"
                 for var in equation[1:]:
@@ -574,9 +599,13 @@ cEndo, cExo, MplusIndirect, MplusIdentifiers, MplusMeanIdentifiers, wald):
                 endo.append(equation[0])
             endo = list(set(endo))
             exo = []
+            xwithNames = []
+            if (MplusXwith != None):
+                for x in MplusXwith:
+                    xwithNames.append(x[0])
             for equation in MplusModel:
                 for var in equation:
-                    if (var not in endo and var not in exo):
+                    if (var not in endo and var not in exo and var not in xwithNames):
                         exo.append(var)
 
 # Add defined covariances
@@ -1318,7 +1347,8 @@ alter type SpecificEffect (f8.0)."""
         spss.EndDataStep()
 
 def MplusPathAnalysis(inpfile, runModel = True, viewOutput = True,
-suppressSPSS = False, latent = None, model = None, means = None,
+suppressSPSS = False, latent = None, 
+model = None, xwith = None, means = None,
 covar = None, covEndo = False, covExo = True, MLR = False,
 useobservations = None, indirect = None, identifiers = None, 
 meanIdentifiers = None, wald = None, constraint = None,
@@ -1372,6 +1402,15 @@ miThreshold = 10, waittime = 5):
             if (variableError == 1):
                 print "Error: Latent variable name overlaps with existing variable name"
                 error = 1
+    if (xwith != None):
+        variableError = 0
+        for equation in xwith:
+            if (equation[0].upper() in SPSSvariablesCaps):
+                variableError = 1
+                break
+            if (variableError == 1):
+                print "Error: Xwith variable name overlaps with existing variable name"
+                error = 1
     if (latent != None):
         variableError = 0
         for equation in latent:
@@ -1391,6 +1430,10 @@ miThreshold = 10, waittime = 5):
                     if (latent != None):
                         for latentvar in latent:
                             if (var.upper() == latentvar[0].upper()):
+                                variableError = 0
+                    if (xwith != None):
+                        for xwithvar in xwith:
+                            if (var.upper() == xwithvar[0].upper()):
                                 variableError = 0
                     if variableError == 1:
                         print "Missing " + var
@@ -1436,6 +1479,21 @@ miThreshold = 10, waittime = 5):
                     for s, m in zip(SPSSvariablesCaps, MplusVariables):
                         if (MplusModel[t][i] == s):
                             MplusModel[t][i] = m
+
+# Convert variables in xwith to Mplus
+# This defines interactions with latent variables
+# Can include observed variables
+        if (xwith == None):
+            MplusXwith = None
+        else:
+            MplusXwith = []
+            for t in xwith:
+                MplusXwith.append([i.upper() for i in t])
+            for t in range(len(MplusXwith)):
+                for i in range(len(MplusXwith[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (MplusXwith[t][i] == s):
+                            MplusXwith[t][i] = m
 
 # Convert variables in covariance list to Mplus
         if (covar == None):
@@ -1546,11 +1604,11 @@ MplusCensored, MplusCount, MplusNominal]
         pathProgram.setTitle("Created by MplusPathAnalysis")
         pathProgram.setData(dataname)
         pathProgram.setVariable(MplusVariables, MplusLatent, MplusModel, 
-MplusUseobservations,
+MplusXwith, MplusUseobservations,
 MplusCategorical, MplusCensored, MplusCount, MplusNominal,
 MplusCluster, MplusWeight, MplusAuxiliary)
-        pathProgram.setAnalysis(MplusCluster, MplusWeight, MLR)
-        pathProgram.setModel(MplusLatent, MplusModel, MplusMeans,
+        pathProgram.setAnalysis(MplusXwith, MplusCluster, MplusWeight, MLR)
+        pathProgram.setModel(MplusLatent, MplusModel, MplusXwith, MplusMeans,
 MplusCovar, covEndo, covExo, MplusIndirect, MplusIdentifiers, 
 MplusMeanIdentifiers, wald)
         pathProgram.setConstraint(constraint)
@@ -1676,7 +1734,7 @@ categorical, censored, count, nominal
 * 2019-04-14 Added constraint option
 * 2019-04-14a Added means and meanIdentifiers options
 * 2019-04-15 Added new parameters section to output
+* 2019-05-10 Added xwith option
+* 2019-05-11 Fixed error with xwith
 
 set printback = on.
-
-
