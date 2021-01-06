@@ -11,8 +11,9 @@
 
 **** Usage: MplusPathAnalysis(inpfile, runModel, viewOutput, suppressSPSS,
 latent, model, xwith, means, covar, covEndo, covExo, MLR,
-useobservations, indirect, identifiers, meanIdentifiers, wald, constraint,
-categorical, censored, count, nominal, cluster, weight, 
+useobservations, indirect, identifiers, meanIdentifiers, covIdentifiers,
+wald, constraint, montecarlo, bootstrap, 
+categorical, censored, count, nominal, cluster, grouping, weight, 
 datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 **** "inpfile" is a string identifying the directory and filename of
 * Mplus input file to be created by the program. This filename must end with
@@ -97,15 +98,23 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * This argument defaults to None, which would indicate that 
 * you do not want to test indirect effects.
 **** "identifiers" is an optional argument provides a list of lists pairing 
-* coefficients with identifiers that will be used as part of a Wald Z test or
-* a Model Constraint calculation. The 
-* coefficients part must specifically match a list in the "model" statement.
+,* coefficients with identifiers that will be used as part of a Wald Z test or
+* a Model Constraint calculation, or a model with parameters forced to be equal.
+* The coefficients part must specifically match a list in the "model" statement.
 * To do this, you may need to separate the predictors for a single outcome 
 * into different lists. This defaults to None, which does not assign any identifiers. 
 **** "meanIdentifiers" is an optional argument that provides a list of lists
-* pairing variables with identifiers that will be used as part of a Wald Z test
-* or a Model Constraint calculation. This defaults to None, which does not
-* assign any identifiers.
+* pairing means with identifiers that will be used as part of a Wald Z test,
+* a Model Constraint calculation, or a model with parameters forced to be equal.
+* This defaults to None, which does not assign any identifiers.
+**** "covIdentifiers" is an optional argument that provides a list of lists
+* pairing covariances with identifiers that will be used as part of a Wald Z test,
+* a Model Constraint calculation, or a model with parameters forced to be equal.
+* This defaults to None, which does not assign any identifiers. Warning! If you
+* set either covExo or covEndo to true, this may redefine the covariances 
+* that you explicitly define using the covar statment, removing the identifier
+* you define here from memory. Avoid using covExo or covEndo if you want
+* to constrain the values of your covariances.
 **** "wald" is an optional argument that identifies a list of constraints that
 * will be tested using a Wald Z test. The constraints will be definted using the
 * identifiers specified in the "identifiers" argument. This can be used 
@@ -116,6 +125,19 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 **** "constraint" is an optional argument that identifies a string
 * to be included in the Model Constraint section, allowing you to estimate
 * linear combinations of means and coefficients from your model. 
+**** "montecarlo" is an optional argument that allows you to specify Monte
+* Carlo integration. If you omit this argument, Mplus will not use Monte Carlo
+* integration. If you want to use Monte Carlo integration, you set this argument
+* to a number that is the number of integration points you want to use. The
+* default used by Mplus is 2000.
+**** "bootstrap" is an optional argument that allows you to request bootstrap
+* confidence intervals. If you want to obtain bootstrap CIs, you set this
+* argument equal to the number of bootstrap samples you want to use. This
+* number should be at least 1000, but can go notably higher. Researchers
+* typically use 5000, but it's not unheard of to use 20000 or more.
+**** "repse" is an optional argument that allows you to identify the resampling
+* method used to create replicate weights. Valid options are bootstrap, 
+* jackknife, jackknife1, jackknife2, brr, and fay(#)
 **** "categorical" is an optional argument that identifies a list of variables
 * that should be treated as categorical by Mplus. Note that what Mplus
 * calls categorical is typically called "ordinal" in other places. Use the
@@ -130,6 +152,12 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 **** "cluster" is an optional argument that identifies a cluster variable.
 * This defaults to None, which would indicate that there is no clustering.
 * Clustering is handled using Mplus type = complex.
+**** "grouping" is an optional argument that defines the groups for a
+* multigroup analysis. This defaults to None, which would indicate that
+* you don't want to perform a multigroup analysis. If you want to perform
+* a multigroup analysis, set this to a string of the form 
+* "variable (value1 = label1 value2 = label2)". You can 
+* have more than two value/label pairs if you want.
 **** "weight" is an optional argument that identifies a sample weight.
 * This defaults to None, which would indicate that there all observations
 * are given equal weight. If you use a weight, the analysis will automatically
@@ -325,6 +353,7 @@ def exportMplus(filepath):
 				newname = newname +"_"
 			else:
 				newname = newname+oldname[i]
+		newname = newname.lstrip("_")
 		for i in range(t):
 			compname = spss.GetVariableName(i)
 			if (newname.lower() == compname.lower()):
@@ -481,7 +510,7 @@ class MplusPAprogram:
         self.data += "'" + splitName + "';"
 
     def setVariable(self, fullList, latent, model, xwith, useobservations, 
-categorical, censored, count, nominal, cluster, weight, auxiliary):
+categorical, censored, count, nominal, cluster, weight, auxiliary, grouping):
         self.variable += "Names are\n"
         for var in fullList:
             self.variable += var + "\n"
@@ -522,6 +551,8 @@ categorical, censored, count, nominal, cluster, weight, auxiliary):
             self.variable += ";\n\nauxiliary = (m) " 
             for var in auxiliary:
                 self.variable += var + "\n"
+        if (grouping != None):
+            self.variable += ";\n\ngrouping is "+ grouping
 
         vartypeList = [categorical, censored, count, nominal]
         varnameList = ["categorical", "censored", "count", "nominal"]
@@ -532,7 +563,7 @@ categorical, censored, count, nominal, cluster, weight, auxiliary):
                     self.variable += var + "\n"
         self.variable += ";\n\nMISSING ARE ALL (-999);"
 
-    def setAnalysis(self, xwith, cluster, weight, MLR):
+    def setAnalysis(self, xwith, cluster, weight, MLR, mc, boot, repse):
         if (cluster != None):
             self.analysis += "type = complex"
             if (xwith != None):
@@ -541,12 +572,18 @@ categorical, censored, count, nominal, cluster, weight, auxiliary):
                 self.analysis += ";"
         else:
             if (xwith != None):
-                self.analysis += "type = random"
+                self.analysis += "type = random;"
         if (weight != None or MLR == True):
-            self.analysis += "estimator = MLR;"
+            self.analysis += "\nestimator = MLR;"
+        if (mc != None):
+            self.analysis += "\nintegration = montecarlo({0});".format(mc)
+        if (boot != None):
+            self.analysis += "\nbootstrap = {0};".format(boot)
+        if (repse != None):
+            self.analysis += "\nrepse = {0};".format(repse)
 
     def setModel(self, MplusLatent, MplusModel, MplusXwith, MplusMeans, MplusCovar, 
-cEndo, cExo, MplusIndirect, MplusIdentifiers, MplusMeanIdentifiers, wald):
+cEndo, cExo, MplusIndirect, MplusIdentifiers, MplusMeanIdentifiers, MplusCovIdentifiers, wald):
 # Latent variable definitions
         if (MplusLatent != None):
             for equation in MplusLatent:
@@ -610,9 +647,14 @@ cEndo, cExo, MplusIndirect, MplusIdentifiers, MplusMeanIdentifiers, wald):
 
 # Add defined covariances
         if (MplusCovar != None):
-            for t in range(len(MplusCovar)):
-                self.model += "\n" + MplusCovar[t][0] + " with "  
-                self.model += MplusCovar[t][1] + ";"
+            for c in MplusCovar:
+                self.model += "\n" + c[0] + " with "  
+                self.model += c[1]
+                if (MplusCovIdentifiers != None):
+                    for id in MplusCovIdentifiers:
+                        if ( c == id[0]):
+                            self.model += " (" + id[1] + ")"
+                self.model += ";"                
             self.model += "\n"
 
 # Covariances for all exogenous variables
@@ -672,8 +714,10 @@ cEndo, cExo, MplusIndirect, MplusIdentifiers, MplusMeanIdentifiers, wald):
         if (constraintText != None):
             self.constraint +="\n" + constraintText
 
-    def setOutput(self, outputText):
+    def setOutput(self, outputText, boot):
         self.output += outputText
+        if (boot != None):
+            self.output += "\ncinterval(bcbootstrap);"
 
     def write(self, filename):
 # Write input file
@@ -781,7 +825,7 @@ def getIndirect(outputBlock):
     return coefficients
 
 class MplusPAoutput:
-    def __init__(self, filename, Mplus, SPSS):
+    def __init__(self, filename, Mplus, SPSS, grouping):
         infile = open(filename, "rb")
         fileText = infile.read()
         infile.close()
@@ -801,6 +845,9 @@ class MplusPAoutput:
         self.Zcoefficients = None
         self.Zcovariances = None
         self.Zdescriptives = None
+        self.groupLabels = None
+        self.groupOutput = None
+        self.groupZoutput = None
         self.r2 = None
         self.indirect = None
         self.Zindirect = None
@@ -842,81 +889,8 @@ class MplusPAoutput:
             self.fit = "\n".join(outputList[start:end])
             self.fit = removeBlanks(self.fit)
 
-# Unstandardized measurement model
-        start = end
-        secexists = 0
-        for t in range(start, len(outputList)):
-            if (re.search(r"\bBY\b", outputList[t])):
-                start = t
-                secexists = 1
-                break
-        if (secexists == 1):
-            for t in range(start, len(outputList)):
-                if (re.search(r"\bON\b", outputList[t]) or
-    re.search(r"\bWITH\b", outputList[t]) or
-    re.search(r"\bMeans\b", outputList[t])):
-                    end = t
-                    break
-            self.measurement = "\n".join(outputList[start:end])
-            self.measurement = removeBlanks(self.measurement)
-
-# Unstandardized coefficients
-        start = end
-        secexists = 0
-        for t in range(start, len(outputList)):
-            if (re.search(r"\bON\b", outputList[t])):
-                start = t
-                secexists = 1
-                break
-        if (secexists == 1):
-            for t in range(start, len(outputList)):
-                if (re.search(r"\bWITH\b", outputList[t]) or
-    re.search(r"\bMeans\b", outputList[t])):
-                    end = t
-                    break
-            self.coefficients = "\n".join(outputList[start:end])
-            self.coefficients = removeBlanks(self.coefficients)
-
-# Unstandardized covariances
-        start = end
-        secexists = 0
-        for t in range(start, len(outputList)):
-            if (re.search(r"\bWITH\b", outputList[t])):
-                start = t
-                secexists = 1
-                break
-        if (secexists == 1):
-            for t in range(start, len(outputList)):
-                if (re.search(r"\bMeans\b", outputList[t])):
-                    end = t
-                    break
-            self.covariances = "\n".join(outputList[start:end])
-            self.covariances = removeBlanks(self.covariances)
-
-# Unstandardized Descriptives
-        start = end
-        for t in range(start, len(outputList)):
-            if ("STANDARDIZED MODEL RESULTS" in outputList[t] or
-"MODEL COMMAND" in outputList[t] or
-"New/Additional Parameters" in outputList[t]):
-                end = t
-                break
-        self.descriptives = "\n".join(outputList[start:end])
-        self.descriptives = removeBlanks(self.descriptives)
-
-# New parameters
-        start = end
-        if ("New/Additional Parameters" in outputList[start]):
-            for t in range(start, len(outputList)):
-                if ("STANDARDIZED MODEL RESULTS" in outputList[t] or
-    "MODEL COMMAND" in outputList[t]):
-                    end = t
-                    break
-            self.newParam = "\n".join(outputList[start:end])
-            self.newParam = removeBlanks(self.newParam)
-
-# Standardized measurement model
-        if ("MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings):
+        if (grouping == None): 
+    # Unstandardized measurement model
             start = end
             secexists = 0
             for t in range(start, len(outputList)):
@@ -927,17 +901,17 @@ class MplusPAoutput:
             if (secexists == 1):
                 for t in range(start, len(outputList)):
                     if (re.search(r"\bON\b", outputList[t]) or
-    re.search(r"\bWITH\b", outputList[t]) or
-    re.search(r"\bMeans\b", outputList[t])):
+        re.search(r"\bWITH\b", outputList[t]) or
+        re.search(r"\bMeans\b", outputList[t])):
                         end = t
                         break
-                self.Zmeasurement = "\n".join(outputList[start:end])
-                self.Zmeasurement = removeBlanks(self.Zmeasurement)
-
-# Standardized coefficients
+                self.measurement = "\n".join(outputList[start:end])
+                self.measurement = removeBlanks(self.measurement)
+    
+    # Unstandardized coefficients
             start = end
             secexists = 0
-            for t in range(end, len(outputList)):
+            for t in range(start, len(outputList)):
                 if (re.search(r"\bON\b", outputList[t])):
                     start = t
                     secexists = 1
@@ -945,13 +919,13 @@ class MplusPAoutput:
             if (secexists == 1):
                 for t in range(start, len(outputList)):
                     if (re.search(r"\bWITH\b", outputList[t]) or
-    re.search(r"\bMeans\b", outputList[t])):
+        re.search(r"\bMeans\b", outputList[t])):
                         end = t
                         break
-                self.Zcoefficients = "\n".join(outputList[start:end])
-                self.Zcoefficients = removeBlanks(self.Zcoefficients)
-
-# Standardized covariances
+                self.coefficients = "\n".join(outputList[start:end])
+                self.coefficients = removeBlanks(self.coefficients)
+    
+    # Unstandardized covariances
             start = end
             secexists = 0
             for t in range(start, len(outputList)):
@@ -964,19 +938,151 @@ class MplusPAoutput:
                     if (re.search(r"\bMeans\b", outputList[t])):
                         end = t
                         break
-                self.Zcovariances = "\n".join(outputList[start:end])
-                self.Zcovariances = removeBlanks(self.Zcovariances)
-
-# Standardized descriptives
+                self.covariances = "\n".join(outputList[start:end])
+                self.covariances = removeBlanks(self.covariances)
+    
+    # Unstandardized Descriptives
             start = end
             for t in range(start, len(outputList)):
-                if ("R-SQUARE" in outputList[t]):
+                if ("STANDARDIZED MODEL RESULTS" in outputList[t] or
+    "MODEL COMMAND" in outputList[t] or
+    "New/Additional Parameters" in outputList[t]):
                     end = t
                     break
-            self.Zdescriptives = "\n".join(outputList[start:end])
-            self.Zdescriptives = removeBlanks(self.Zdescriptives)
+            self.descriptives = "\n".join(outputList[start:end])
+            self.descriptives = removeBlanks(self.descriptives)
+    
+    # New parameters
+            start = end
+            if ("New/Additional Parameters" in outputList[start]):
+                for t in range(start, len(outputList)):
+                    if ("STANDARDIZED MODEL RESULTS" in outputList[t] or
+        "MODEL COMMAND" in outputList[t]):
+                        end = t
+                        break
+                self.newParam = "\n".join(outputList[start:end])
+                self.newParam = removeBlanks(self.newParam)
+    
+    # Standardized measurement model
+            if ("MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings):
+                start = end
+                secexists = 0
+                for t in range(start, len(outputList)):
+                    if (re.search(r"\bBY\b", outputList[t])):
+                        start = t
+                        secexists = 1
+                        break
+                if (secexists == 1):
+                    for t in range(start, len(outputList)):
+                        if (re.search(r"\bON\b", outputList[t]) or
+        re.search(r"\bWITH\b", outputList[t]) or
+        re.search(r"\bMeans\b", outputList[t])):
+                            end = t
+                            break
+                    self.Zmeasurement = "\n".join(outputList[start:end])
+                    self.Zmeasurement = removeBlanks(self.Zmeasurement)
+    
+    # Standardized coefficients
+                start = end
+                secexists = 0
+                for t in range(end, len(outputList)):
+                    if (re.search(r"\bON\b", outputList[t])):
+                        start = t
+                        secexists = 1
+                        break
+                if (secexists == 1):
+                    for t in range(start, len(outputList)):
+                        if (re.search(r"\bWITH\b", outputList[t]) or
+        re.search(r"\bMeans\b", outputList[t])):
+                            end = t
+                            break
+                    self.Zcoefficients = "\n".join(outputList[start:end])
+                    self.Zcoefficients = removeBlanks(self.Zcoefficients)
+    
+    # Standardized covariances
+                start = end
+                secexists = 0
+                for t in range(start, len(outputList)):
+                    if (re.search(r"\bWITH\b", outputList[t])):
+                        start = t
+                        secexists = 1
+                        break
+                if (secexists == 1):
+                    for t in range(start, len(outputList)):
+                        if (re.search(r"\bMeans\b", outputList[t])):
+                            end = t
+                            break
+                    self.Zcovariances = "\n".join(outputList[start:end])
+                    self.Zcovariances = removeBlanks(self.Zcovariances)
+    
+    # Standardized descriptives
+                start = end
+                for t in range(start, len(outputList)):
+                    if ("R-SQUARE" in outputList[t]):
+                        end = t
+                        break
+                self.Zdescriptives = "\n".join(outputList[start:end])
+                self.Zdescriptives = removeBlanks(self.Zdescriptives)
+                
+        else:
+# Identifying group labels
+            self.groupLabels = []
+            temp = grouping[grouping.find("(")+1:grouping.find(")")].strip()
+            while ("=" in temp):
+                sep = temp.find("=")
+                temp = temp[sep+1:].strip()
+                if ("=" in temp):
+                    sep = temp.find(" ")
+                    self.groupLabels.append(temp[:sep].strip())
+                    temp = temp[sep+1:]
+                else:
+                    self.groupLabels.append(temp)
+                    temp = ""
+####
+# MGA output
+####
+# Storing an output for each group
+# Splitting by group but not by other things.   
 
+# Unstandardized model             
+            self.groupOutput = []         
+# Advancing to first group
+            start = end
+            for t in range(start, len(outputList)):
+                if ("Group" in outputList[t]):
+                    end = t
+                    break
+            for label in self.groupLabels:
+                start = end
+                for t in range(start + 1, len(outputList)):
+                    if ("Group" in outputList[t] or
+                            "STANDARDIZED MODEL RESULTS" in outputList[t] or 
+                            "QUALITY OF NUMERICAL RESULTS" in outputList[t]):
+                        end = t
+                        break
+                gO = "\n".join(outputList[start:end])
+                self.groupOutput += [removeBlanks(gO)]
+                
+# Standardized model             
+            self.groupZoutput = []         
+# Advancing to first group
+            start = end
+            for t in range(start, len(outputList)):
+                if ("Group" in outputList[t]):
+                    end = t
+                    break
+            for label in self.groupLabels:
+                start = end
+                for t in range(start + 1, len(outputList)):
+                    if ("Group" in outputList[t] or
+                            "R-SQUARE" in outputList[t]):
+                        end = t
+                        break
+                gO = "\n".join(outputList[start:end])
+                self.groupZoutput += [removeBlanks(gO)]
+            
 # R squares
+        if ("MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings):            
             start = end
             for t in range(start, len(outputList)):
                 if ("QUALITY OF NUMERICAL RESULTS" in outputList[t]):
@@ -1060,6 +1166,13 @@ or "MODIFICATION" in outputList[t]):
                 self.Zcovariances = self.Zcovariances.replace(var1.upper(), var2)
             if (self.Zdescriptives != None):
                 self.Zdescriptives = self.Zdescriptives.replace(var1.upper(), var2)
+            if (self.groupOutput != None):
+
+                for t in range(len(self.groupOutput)):
+                    self.groupOutput[t] = self.groupOutput[t].replace(var1.upper(), var2)
+            if (self.groupZoutput != None):
+                for t in range(len(self.groupZoutput)):
+                    self.groupZoutput[t] = self.groupZoutput[t].replace(var1.upper(), var2)
             if (self.r2 != None):
                 self.r2 = self.r2.replace(var1.upper(), var2)
             if (self.indirect != None):
@@ -1190,6 +1303,14 @@ in self.warnings)):
             print "Standardized"
             print self.header
             print self.Zdescriptives
+        if (self.groupOutput != None):
+            for t in range(len(self.groupLabels)):
+                spss.Submit("title 'GROUP {0} UNSTANDARDIZED'.".format(self.groupLabels[t]))
+                print self.groupOutput[t]
+        if (self.groupZoutput != None):
+            for t in range(len(self.groupLabels)):
+                spss.Submit("title 'GROUP {0} STANDARDIZED'.".format(self.groupLabels[t]))
+                print self.groupZoutput[t]
         if (self.r2 != None):
             spss.Submit("title 'R-SQUARES'.")
             print self.r2
@@ -1351,9 +1472,11 @@ suppressSPSS = False, latent = None,
 model = None, xwith = None, means = None,
 covar = None, covEndo = False, covExo = True, MLR = False,
 useobservations = None, indirect = None, identifiers = None, 
-meanIdentifiers = None, wald = None, constraint = None,
+meanIdentifiers = None, covIdentifiers = None, wald = None, 
+constraint = None, montecarlo = None,
+bootstrap = None, repse = None,
 categorical = None, censored = None, count = None, nominal = None,
-cluster = None, weight = None, auxiliary = None, 
+cluster = None, grouping = None, weight = None, auxiliary = None, 
 datasetName = None, indDatasetName = None, datasetLabels = [], 
 miThreshold = 10, waittime = 5):
 
@@ -1553,6 +1676,24 @@ miThreshold = 10, waittime = 5):
                         idMeans[t] = m
                 MplusMeanIdentifiers.append([idMeans[t], meanIdentifiers[t][1]])
 
+# Convert covariance identifiers to Mplus
+        if (covIdentifiers == None):
+            MplusCovIdentifiers = None
+        else:
+            MplusCovIdentifiers = []
+            idEquations = []
+            for t in covIdentifiers:
+                j = []
+                for i in t[0]:
+                    j.append(i.upper())
+                idEquations.append(j)
+            for t in range(len(idEquations)):
+                for i in range(len(idEquations[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (idEquations[t][i] == s):
+                            idEquations[t][i] = m
+                MplusCovIdentifiers.append([idEquations[t], covIdentifiers[t][1]])                
+
 # Convert useobservations to Mplus
         if (useobservations == None):
             MplusUseobservations = None
@@ -1570,6 +1711,19 @@ miThreshold = 10, waittime = 5):
                 if (cluster.upper() == s):
                     MplusCluster = m
 
+# Convert grouping variable to Mplus
+        if (grouping == None):
+            MplusGrouping = None
+        else:
+            # Separate grouping variable from values
+            sep = grouping.find("(")
+            grouping_var = grouping[0:sep].strip()
+            grouping_val = grouping[sep:]
+            for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                if (grouping_var.upper() == s):
+                    MplusGrouping = m
+            MplusGrouping += " " + grouping_val
+            
 # Convert variable list arguments to Mplus
         lvarList = [means, auxiliary, categorical, censored, count, nominal]
         MplusMeans = []
@@ -1606,13 +1760,13 @@ MplusCensored, MplusCount, MplusNominal]
         pathProgram.setVariable(MplusVariables, MplusLatent, MplusModel, 
 MplusXwith, MplusUseobservations,
 MplusCategorical, MplusCensored, MplusCount, MplusNominal,
-MplusCluster, MplusWeight, MplusAuxiliary)
-        pathProgram.setAnalysis(MplusXwith, MplusCluster, MplusWeight, MLR)
+MplusCluster, MplusWeight, MplusAuxiliary, MplusGrouping)
+        pathProgram.setAnalysis(MplusXwith, MplusCluster, MplusWeight, MLR, montecarlo, bootstrap, repse)
         pathProgram.setModel(MplusLatent, MplusModel, MplusXwith, MplusMeans,
 MplusCovar, covEndo, covExo, MplusIndirect, MplusIdentifiers, 
-MplusMeanIdentifiers, wald)
+MplusMeanIdentifiers, MplusCovIdentifiers, wald)
         pathProgram.setConstraint(constraint)
-        pathProgram.setOutput("stdyx;\nmodindices({0});".format(miThreshold))
+        pathProgram.setOutput("stdyx;\nmodindices({0});".format(miThreshold), bootstrap)
         pathProgram.write(outdir + fname + ".inp")
 
 # Add latent variables to SPSSvariables lists
@@ -1637,9 +1791,8 @@ MplusMeanIdentifiers, wald)
             spss.Submit(submitstring)
 
         if (viewOutput == True):
-    # Parse output
             pathOutput = MplusPAoutput(outdir + fname + ".out", 
-    MplusVariables, SPSSvariables)
+    MplusVariables, SPSSvariables, MplusGrouping)
             pathOutput.toSPSSoutput()
 
 # Redirect output
@@ -1666,6 +1819,7 @@ MplusMeanIdentifiers, wald)
 # Replace titles
     titleToPane()
 end program python.
+set printback = on.
 
 ************
 * Version History
@@ -1736,5 +1890,15 @@ categorical, censored, count, nominal
 * 2019-04-15 Added new parameters section to output
 * 2019-05-10 Added xwith option
 * 2019-05-11 Fixed error with xwith
-
-set printback = on.
+* 2020-10-29 Added montecarlo option
+* 2020-11-01 Added bootstrap option
+* 2020-11-04 Removed non-letter characters at the start of variable names
+* 2020-11-04a Added covIdentifiers option
+* 2020-11-05 Added warning about using covIdentifiers with covExo or covEndo
+* 2020-12-02 Added grouping option
+* 2020-12-02a Changed output for MGA
+* 2020-12-02b Separated unstandardized and standardized MGA output
+* 2020-12-07 Corrected misspelling of wald
+* 2020-12-27 Replaced variable names in grouping output
+COMMENT BOOKMARK;LINE_NUM=1151;ID=1.
+COMMENT BOOKMARK;LINE_NUM=1305;ID=2.
