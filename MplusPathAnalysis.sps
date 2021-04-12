@@ -1,5 +1,4 @@
 * Encoding: UTF-8.
-* Encoding: .
 * Use Mplus to run a Path Analysis from within SPSS
 * By Jamie DeCoster
 
@@ -9,9 +8,9 @@
 * that will perform the path analysis in Mplus, then loads the important
 * parts of the Mplus output into the SPSS output window.
 
-**** Usage: MplusPathAnalysis(inpfile, runModel, viewOutput, suppressSPSS,
-latent, model, xwith, means, covar, covEndo, covExo, MLR,
-useobservations, indirect, identifiers, meanIdentifiers, covIdentifiers,
+**** Usage: MplusPathAnalysis(inpfile, modellabel, runModel, viewOutput, suppressSPSS,
+latent, latentFixed, model, xwith, means, covar, covEndo, covExo, MLR,
+useobservations, subpopulation, indirect, identifiers, meanIdentifiers, covIdentifiers,
 wald, constraint, montecarlo, bootstrap, 
 categorical, censored, count, nominal, cluster, grouping, weight, 
 datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
@@ -19,13 +18,8 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * Mplus input file to be created by the program. This filename must end with
 * .inp . The data file will automatically be saved to the same directory. This
 * argument is required.
-**** "latent" is a list of lists identifying the relations between observed and latent 
-* variables. This argument is optional, and can be omitted if your model does
-* not have any latent variables. When creating this argument, you first create a
-* list of strings for each latent variable where the first element is the name of
-* the latent variable and the remaining elements are the names of the observed
-* variables that load on that latent variable. You then combine these individual
-* latent variable lists into a larger list identifying the full measurement model.
+**** "modellabel" is a string that indicates what label should be added to the output at the
+* top of your model. If this is not specified, the label defaults to "MplusPathAnalysis"
 **** "runModel" is a boolean argument indicating whether or not you want the 
 * program to actually run the program it creates based on the model you define. 
 * You may choose to not run the model when you want to use the program to 
@@ -45,6 +39,20 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * model is not running correctly, the SPSS output can help you see where
 * the errors are. Setting this argument to True will not suppress the Mplus
 * output. By default, the SPSS output is not suppressed.
+**** "latent" is a list of lists identifying the relations between observed and latent 
+* variables. This argument is optional, and can be omitted if your model does
+* not have any latent variables. When creating this argument, you first create a
+* list of strings for each latent variable where the first element is the name of
+* the latent variable and the remaining elements are the names of the observed
+* variables that load on that latent variable. You then combine these individual
+* latent variable lists into a larger list identifying the full measurement model.
+**** "latentFixed" is a list of lists identifying any values of latent variable links 
+* that are fixed to constant values. Each entry in this list pairs a within latent 
+* coefficient with its constant value. The coefficients part must 
+* specifically match an element of
+* the latent statement. To do this, you may need to separate the 
+* observed values for a single latent variable into different lists. This defaults to None, 
+* which does not assign any fixed latent coefficients. 
 **** "model" is a list of lists identifying the equations in your
 * path model.  First, you create a set of lists that each have the outcome as
 * the first element and then have the predictors as the following elements.
@@ -88,7 +96,13 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 **** "useobservations" is a string specifying a selection
 * criterion that must be met for observations to be included in the 
 * analysis. This is an optional argument that defaults to None, indicating
-* that all observations are to be included in the analysis.
+* that all observations are to be included in the analysis. This should not be
+* used if you have a cluster variable - in that case, use "subpopulation".
+**** "subpopulation" is a string specifying a selection
+* criterion that must be met for observations to be included in the 
+* analysis. This is an optional argument that defaults to None, indicating
+* that all observations are to be included in the analysis. This should only be
+* used if you have a cluster variable. If you do not, use "useobservations".
 **** "indirect" is an optional argument that identifies a set of indirect effects
 * that should be tested within the specified model. The argument is provided
 * as a list of lists. Each individual list identifies a single indirect effect that
@@ -201,7 +215,7 @@ means = ["CO"],
 covar = [ ["CO","ES"], ["CO", "IS"] ],
 covEndo = False,
 covExo = True,
-useobservations = "p2cond==1",
+subpopulation = "p2cond==1",
 indirect = [ ["CO", "att_ch", "Tx"],
 ["ES", "att_ch", "Tx"],
 ["IS", "att_ch", "Tx"] ],
@@ -210,7 +224,8 @@ identifiers = [ [ ["CO", "Educ"], "b1"],
 [ ["IS", "Educ"], "b3"] ],
 meanIdentifiers = [ ["CO", "COint"] ],
 wald = [ "b1 = 0", "b2 = 0", "b3 = 0" ],
-constraint = """loCO = COint + b1*12;
+constraint = """new loCO medCO hiCO;
+loCO = COint + b1*12;
 medCO = COint + b1*14;
 hiCO = COint + b1*16;""",
 categorical = ["yrs_tch"],
@@ -509,7 +524,7 @@ class MplusPAprogram:
         splitName = MplusSplit(filename, 75)
         self.data += "'" + splitName + "';"
 
-    def setVariable(self, fullList, latent, model, xwith, useobservations, 
+    def setVariable(self, fullList, latent, model, xwith, useobservations, subpopulation,
 categorical, censored, count, nominal, cluster, weight, auxiliary, grouping):
         self.variable += "Names are\n"
         for var in fullList:
@@ -543,6 +558,8 @@ categorical, censored, count, nominal, cluster, weight, auxiliary, grouping):
 # Other variable additions
         if (useobservations != None):
             self.variable += ";\n\nuseobservations are " + useobservations
+        if (subpopulation != None):
+            self.variable += ";\n\nsubpopulation is " + subpopulation
         if (cluster != None):
             self.variable += ";\n\ncluster is " + cluster
         if (weight != None):
@@ -582,18 +599,23 @@ categorical, censored, count, nominal, cluster, weight, auxiliary, grouping):
         if (repse != None):
             self.analysis += "\nrepse = {0};".format(repse)
 
-    def setModel(self, MplusLatent, MplusModel, MplusXwith, MplusMeans, MplusCovar, 
-cEndo, cExo, MplusIndirect, MplusIdentifiers, MplusMeanIdentifiers, MplusCovIdentifiers, wald):
+    def setModel(self, MplusLatent, MplusLatentFixed, MplusModel, MplusXwith, 
+MplusMeans, MplusCovar, cEndo, cExo, MplusIndirect, MplusIdentifiers, 
+MplusMeanIdentifiers, MplusCovIdentifiers, wald):
 # Latent variable definitions
         if (MplusLatent != None):
             for equation in MplusLatent:
                 curline = equation[0] + " by"
                 for var in equation[1:]:
-                        if (len(curline) + len(var) < 75):
-                            curline += " " + var
-                        else:
-                            self.model += curline + "\n"
-                            curline = var
+                    if (len(curline) + len(var) < 75):
+                        curline += " " + var
+                    else:
+                        self.model += curline + "\n"
+                        curline = var
+                if (MplusLatentFixed != None):
+                      for t in MplusLatentFixed:
+                          if (equation == t[0]):
+                              curline += "@" + str(t[1])                    
                 self.model += curline + ";\n"
 
 # Xwith statements
@@ -825,7 +847,8 @@ def getIndirect(outputBlock):
     return coefficients
 
 class MplusPAoutput:
-    def __init__(self, filename, Mplus, SPSS, grouping):
+    def __init__(self, modellabel, filename, Mplus, SPSS, grouping):
+        self.label = modellabel
         infile = open(filename, "rb")
         fileText = infile.read()
         infile.close()
@@ -862,7 +885,7 @@ class MplusPAoutput:
         self.summary = "\n".join(outputList[start:end+1])
 # Warnings
         for t in range(len(outputList)):
-            if ("Covariance Coverage" in outputList[t]):
+            if ( "Number of clusters" in outputList[t] or "Covariance Coverage" in outputList[t]):
                 covcov = t
         blank = 0
         for t in range(covcov, len(outputList)):
@@ -1251,7 +1274,8 @@ in self.warnings)):
 
 # Print function
     def toSPSSoutput(self):
-
+        print 1, self.label
+        spss.Submit("title '" + self.label + "'.")        
         spss.Submit("title 'SUMMARY'.")
         print self.summary
         spss.Submit("title 'WARNINGS'.")
@@ -1467,13 +1491,14 @@ alter type SpecificEffect (f8.0)."""
         spss.SetActive(datasetObj)
         spss.EndDataStep()
 
-def MplusPathAnalysis(inpfile, runModel = True, viewOutput = True,
-suppressSPSS = False, latent = None, 
+def MplusPathAnalysis(inpfile, modellabel = "MplusPathAnalysis",
+runModel = True, viewOutput = True, suppressSPSS = False, 
+latent = None, latentFixed = None,
 model = None, xwith = None, means = None,
 covar = None, covEndo = False, covExo = True, MLR = False,
-useobservations = None, indirect = None, identifiers = None, 
-meanIdentifiers = None, covIdentifiers = None, wald = None, 
-constraint = None, montecarlo = None,
+useobservations = None, subpopulation = None, indirect = None, 
+identifiers = None, meanIdentifiers = None, covIdentifiers = None, 
+wald = None, constraint = None, montecarlo = None,
 bootstrap = None, repse = None,
 categorical = None, censored = None, count = None, nominal = None,
 cluster = None, grouping = None, weight = None, auxiliary = None, 
@@ -1590,6 +1615,25 @@ miThreshold = 10, waittime = 5):
                         if (MplusLatent[t][i] == s):
                             MplusLatent[t][i] = m
 
+# Convert latentFixed to Mplus
+        if (latentFixed == None):
+            MplusLatentFixed = None
+        else:
+            MplusLatentFixed = []
+            fixedEquations = []
+            for t in latentFixed:
+                j = []
+                for i in t[0]:  # t[0] is the equation, t[1] is the fixed value
+                    j.append(i.upper())
+                fixedEquations.append(j) # appending the upper-case version of the equation
+            for t in range(len(fixedEquations)):
+                for i in range (len(fixedEquations[t])):
+                    for s,m in zip(SPSSvariablesCaps, MplusVariables):
+                        if (fixedEquations[t] [i] == s ):
+                            fixedEquations[t] [i] = m
+                MplusLatentFixed.append([fixedEquations[t], latentFixed[t] [1] ])
+                             
+
 # Define model using Mplus variables
         if (model == None):
             MplusModel = None
@@ -1702,6 +1746,15 @@ miThreshold = 10, waittime = 5):
             for s, m in zip(SPSSvariablesCaps, MplusVariables):
                 z = re.compile(s, re.IGNORECASE)
                 MplusUseobservations = z.sub(m, MplusUseobservations)
+                
+# Convert subpopulation to Mplus
+        if (subpopulation == None):
+            MplusSubpopulation = None
+        else:
+            MplusSubpopulation = subpopulation
+            for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                z = re.compile(s, re.IGNORECASE)
+                MplusSubpopulation = z.sub(m, MplusSubpopulation)
 
 # Convert cluster variable to Mplus
         if (cluster == None):
@@ -1758,11 +1811,11 @@ MplusCensored, MplusCount, MplusNominal]
         pathProgram.setTitle("Created by MplusPathAnalysis")
         pathProgram.setData(dataname)
         pathProgram.setVariable(MplusVariables, MplusLatent, MplusModel, 
-MplusXwith, MplusUseobservations,
+MplusXwith, MplusUseobservations, MplusSubpopulation,
 MplusCategorical, MplusCensored, MplusCount, MplusNominal,
 MplusCluster, MplusWeight, MplusAuxiliary, MplusGrouping)
         pathProgram.setAnalysis(MplusXwith, MplusCluster, MplusWeight, MLR, montecarlo, bootstrap, repse)
-        pathProgram.setModel(MplusLatent, MplusModel, MplusXwith, MplusMeans,
+        pathProgram.setModel(MplusLatent, MplusLatentFixed, MplusModel, MplusXwith, MplusMeans,
 MplusCovar, covEndo, covExo, MplusIndirect, MplusIdentifiers, 
 MplusMeanIdentifiers, MplusCovIdentifiers, wald)
         pathProgram.setConstraint(constraint)
@@ -1772,13 +1825,15 @@ MplusMeanIdentifiers, MplusCovIdentifiers, wald)
 # Add latent variables to SPSSvariables lists
         if (latent != None):
             for equation in latent:
-                SPSSvariables.append(equation[0])
-                SPSSvariablesCaps.append(equation[0].upper())
+                if (equation[0].upper() not in SPSSvariablesCaps):
+                    SPSSvariables.append(equation[0])
+                    SPSSvariablesCaps.append(equation[0].upper())
 
 # Add latent variables to MplusVariable list
         if (latent != None):
-    	       for equation in latent:
-                MplusVariables.append(equation[0].upper())
+            for equation in latent:
+                if (equation[0].upper() not in MplusVariables):
+                    MplusVariables.append(equation[0].upper())
 
         if (runModel == True):
     # Run input program
@@ -1791,7 +1846,7 @@ MplusMeanIdentifiers, MplusCovIdentifiers, wald)
             spss.Submit(submitstring)
 
         if (viewOutput == True):
-            pathOutput = MplusPAoutput(outdir + fname + ".out", 
+            pathOutput = MplusPAoutput(modellabel, outdir + fname + ".out", 
     MplusVariables, SPSSvariables, MplusGrouping)
             pathOutput.toSPSSoutput()
 
@@ -1900,5 +1955,9 @@ categorical, censored, count, nominal
 * 2020-12-02b Separated unstandardized and standardized MGA output
 * 2020-12-07 Corrected misspelling of wald
 * 2020-12-27 Replaced variable names in grouping output
-COMMENT BOOKMARK;LINE_NUM=1151;ID=1.
-COMMENT BOOKMARK;LINE_NUM=1305;ID=2.
+* 2021-01-26 Added "subpopulation" argument
+* 2021-04-08 Added latentFixed argument
+*    Ensured that each latent variable only added to SPSSvariables once
+* 2021-04-09 Added modellabel argument
+COMMENT BOOKMARK;LINE_NUM=1174;ID=1.
+COMMENT BOOKMARK;LINE_NUM=1329;ID=2.
