@@ -1,4 +1,4 @@
-* Encoding: UTF-8.
+﻿* Encoding: UTF-8.
 * Use Mplus to run a Path Analysis from within SPSS
 * By Jamie DeCoster
 
@@ -9,11 +9,12 @@
 * parts of the Mplus output into the SPSS output window.
 
 **** Usage: MplusPathAnalysis(inpfile, modellabel, runModel, viewOutput, suppressSPSS,
-latent, latentFixed, model, xwith, means, covar, covEndo, covExo, MLR,
+latent, latentFixed, model, xwith, means, covar, covEndo, covExo, estimator,
 useobservations, subpopulation, indirect, identifiers, meanIdentifiers, covIdentifiers,
-wald, constraint, montecarlo, bootstrap, 
-categorical, censored, count, nominal, cluster, grouping, weight, 
-datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
+wald, constraint, montecarlo, bootstrap, repse,
+categorical, censored, count, nominal, idvariable, cluster, grouping, weight, 
+datasetName, datasetIntercepts, indDatasetName, datasetLabels, miThreshold,
+savedata, saveFscores, waittime)
 **** "inpfile" is a string identifying the directory and filename of
 * Mplus input file to be created by the program. This filename must end with
 * .inp . The data file will automatically be saved to the same directory. This
@@ -89,10 +90,11 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * will not, although you can still specify individual covariances between 
 * exogenous variables using the "covar" argument described above.
 * By default, the value for covExo is True.
-**** "MLR" is a boolean indicating whether you would like use the MLR
-* (maximum likelihood with robust standard errors) estimator. By default,
-* the value for mlr is False, meaning that the analysis will be performed
-* using the standard maximum likelihood estimator.
+**** "estimator" is a string specifying the estimation method to be used. 
+* Valid values are ML, MLM, MLMV, MLR, MLF, MUML, WLS, WLSM,
+* WLSMV, ULS, ULSMV, GLS, and BAYES. If this argument is omitted,
+* the Mplus default will be used, which depends on the data and model
+* types you are using (most commonly MLR).
 **** "useobservations" is a string specifying a selection
 * criterion that must be met for observations to be included in the 
 * analysis. This is an optional argument that defaults to None, indicating
@@ -163,6 +165,9 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * by Mplus.
 **** "nominal" is an optional argument that identifies a list of variables
 * that should be treated as nominal variables by Mplus.
+**** "idvariable" is an optional argument that identifies an identifier variable
+* for your data set. This is needed if you are saving latent scores and want
+* to merge them into another data set.
 **** "cluster" is an optional argument that identifies a cluster variable.
 * This defaults to None, which would indicate that there is no clustering.
 * Clustering is handled using Mplus type = complex.
@@ -174,24 +179,34 @@ datasetName, datasetLabels, indDatasetName, indDatasetLabels, waittime)
 * have more than two value/label pairs if you want.
 **** "weight" is an optional argument that identifies a sample weight.
 * This defaults to None, which would indicate that there all observations
-* are given equal weight. If you use a weight, the analysis will automatically
-* use the MLR estimator.
+* are given equal weight. Note that not all estimators can make use of
+* weights. MLR is typically a good option.
 **** "auxiliary" is an optional argument that identifies a list of variables
 * that are used to assist with estimating missing values but which are
 * not to be included in the model. This defaults to None, which would
 * indicate that there are no auxiliary variables in the analysis.
 **** "datasetName" is an optional argument that identifies the name of
 * an SPSS dataset that should be used to record the coefficients.
+**** "datasetIntercepts" is an optional argument indicating whether you
+* want intercepts included in the saved dataset. This defaults to True.
 **** "indDatasetName" is an optional argument that identifies the name of
 * an SPSS dataset that should be used to record the tests of the indirect
 * effects. This will do nothing if no indirect tests are defined.
 **** "datasetLabels" is an optional argument that identifies a list of
-* labels that would be applied to the datasets containing coefficients or
-* tests of the indirect effects. This can be useful if you are appending 
+* labels that would be applied to the datasets containing coefficients 
+* or tests of the indirect effects. This can be useful if you are appending 
 * the results from multiple analyses to the same dataset.
 **** "miThreshold" is an optional argument that identifies the
 * minimum chi-square change required for a modificiation index
 * to be reported. Omitting this argument uses a default of 10.
+**** "savedata" is an optional argument that allows you to save the data file 
+* used in analysis to a file. The value of
+* this argument should be set to the name of the data file that should be created.
+* The saved file will be placed in the same directory as the .inp file. This defaults to
+* None, which does not save the data file.
+**** "saveFscores" is an optional boolean argument that allows you to indicate whether 
+* latent scores should be included in the savedata file. This defaults to False. The
+* value of this argument does nothing if savedata = None.
 **** "waittime" is an optional argument that specifies how many seconds
 * the program should wait after running the Mplus program before it 
 * tries to read the output file. This defaults to 5. You should be sure that
@@ -525,7 +540,7 @@ class MplusPAprogram:
         self.data += "'" + splitName + "';"
 
     def setVariable(self, fullList, latent, model, xwith, useobservations, subpopulation,
-categorical, censored, count, nominal, cluster, weight, auxiliary, grouping):
+categorical, censored, count, nominal, idvariable, cluster, weight, auxiliary, grouping):
         self.variable += "Names are\n"
         for var in fullList:
             self.variable += var + "\n"
@@ -537,8 +552,9 @@ categorical, censored, count, nominal, cluster, weight, auxiliary, grouping):
         if (latent != None):
             for equation in latent:
                 latentName.append(equation[0])
+            for equation in latent:
                 for var in equation[1:]:
-                    if (var not in useList):
+                    if (var not in useList and var not in latentName):
                         useList.append(var)
         if (xwith != None):
             for equation in xwith:
@@ -560,8 +576,10 @@ categorical, censored, count, nominal, cluster, weight, auxiliary, grouping):
             self.variable += ";\n\nuseobservations are " + useobservations
         if (subpopulation != None):
             self.variable += ";\n\nsubpopulation is " + subpopulation
+        if (idvariable != None):
+            self.variable += ";\n\nidvariable is " + idvariable
         if (cluster != None):
-            self.variable += ";\n\ncluster is " + cluster
+            self.variable += ";\n\ncluster is " + cluster            
         if (weight != None):
             self.variable += ";\n\nweight is " + weight
         if (auxiliary != []):
@@ -580,7 +598,7 @@ categorical, censored, count, nominal, cluster, weight, auxiliary, grouping):
                     self.variable += var + "\n"
         self.variable += ";\n\nMISSING ARE ALL (-999);"
 
-    def setAnalysis(self, xwith, cluster, weight, MLR, mc, boot, repse):
+    def setAnalysis(self, xwith, cluster, weight, estimator, mc, boot, repse):
         if (cluster != None):
             self.analysis += "type = complex"
             if (xwith != None):
@@ -590,8 +608,8 @@ categorical, censored, count, nominal, cluster, weight, auxiliary, grouping):
         else:
             if (xwith != None):
                 self.analysis += "type = random;"
-        if (weight != None or MLR == True):
-            self.analysis += "\nestimator = MLR;"
+        if (estimator != None):
+            self.analysis += "\nestimator = {0};".format(estimator)
         if (mc != None):
             self.analysis += "\nintegration = montecarlo({0});".format(mc)
         if (boot != None):
@@ -741,6 +759,12 @@ MplusMeanIdentifiers, MplusCovIdentifiers, wald):
         if (boot != None):
             self.output += "\ncinterval(bcbootstrap);"
 
+    def setSavedata(self, savedata, saveFscores):
+        if (savedata != None):
+            self.savedata += "\nfile = {0};".format(savedata)
+            if (saveFscores == True):
+                self.savedata += "\nsave = fscores;"
+
     def write(self, filename):
 # Write input file
         sectionList = [self.title, self.data, self.variable, self.define,
@@ -792,9 +816,47 @@ def getCoefficients(outputBlock):
                        line = [outcome]
                        line.extend(values2[0:1])
                        for j in values2[1:]:
-                           line.append(float(j))
+                           if (j != "*"):
+                               line.append(float(j))
                        coefficients.append(line)
        return coefficients
+
+def getIntercepts(outputBlock):
+    if (outputBlock == None):
+        return None
+    else:
+        outputBlock2 = outputBlock.replace("\r", "")
+        blockList = outputBlock2.split("\n")
+        start = -1
+        end = len(blockList)
+        for t in range(len(blockList)):
+            values1 = blockList[t].split(" ")
+            values2 = []
+            for i in values1:
+                if (i != ""):
+                    values2.append(i)
+            
+            if (len(values2) > 0):
+                if (values2[0] == "Intercepts"):
+                   start = t+1
+                if (values2[0] == "Variances"):
+                   end = t-1
+        if (start == -1):
+            intercepts = None
+        else:
+            intercepts = []
+            for t in range(start, end):
+                values1 = blockList[t].split(" ")
+                values2 = []
+                for i in values1:
+                   if (i != ""):
+                       values2.append(i)
+                if (len(values2) > 2):
+                    line = [values2[0], "Intercept"]
+                    for j in values2[1:]:
+                        line.append(float(j))
+                    intercepts.append(line)
+        return intercepts
 
 def getIndirect(outputBlock):
     outputBlock2 = outputBlock.replace("\r", "")
@@ -818,7 +880,8 @@ def getIndirect(outputBlock):
                 else:
                     line = [effect, "Total", 0]
                     for j in values2[1:]:
-                        line.append(float(j))
+                        if (j != "*"):
+                            line.append(float(j))
                     coefficients.append(line)
             if ("Specific indirect") in blockList[t]:
                 specific = 1
@@ -842,19 +905,24 @@ def getIndirect(outputBlock):
                         line = [effect, path, specific]
                         path = ""
                         for j in values2[1:]:
-                            line.append(float(j))
+                            if (j != "*"):                        
+                                line.append(float(j))
                         coefficients.append(line)
     return coefficients
 
 class MplusPAoutput:
-    def __init__(self, modellabel, filename, Mplus, SPSS, grouping):
+    def __init__(self, modellabel, filename, Mplus, SPSS, grouping, estimator):
         self.label = modellabel
         infile = open(filename, "rb")
         fileText = infile.read()
         infile.close()
         outputList = fileText.split("\n")
 
-        self.header = """                                                                   Two-Tailed 
+        if (estimator == "BAYES"):
+            self.header = """                                               Posterior  One-Tailed         95% C.I.
+                                   Estimate       S.D.      P-Value   Lower 2.5%  Upper 2.5%  Sig"""
+        else:
+            self.header = """                                                                   Two-Tailed 
                                    Estimate       S.E.  Est./S.E.    P-Value"""
         self.summary = None
         self.warnings = None
@@ -868,6 +936,10 @@ class MplusPAoutput:
         self.Zcoefficients = None
         self.Zcovariances = None
         self.Zdescriptives = None
+        self.ci = None
+        self.Zci = None
+        self.indirectci = None
+        self.Zindirectci = None        
         self.groupLabels = None
         self.groupOutput = None
         self.groupZoutput = None
@@ -883,6 +955,7 @@ class MplusPAoutput:
             if ("Number of continuous latent variables" in outputList[t]):
                 end = t
         self.summary = "\n".join(outputList[start:end+1])
+        
 # Warnings
         for t in range(len(outputList)):
             if ( "Number of clusters" in outputList[t] or "Covariance Coverage" in outputList[t]):
@@ -903,6 +976,7 @@ class MplusPAoutput:
         self.warnings = removeBlanks(self.warnings)
 
         if ("MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings):
+
 # Fit statistics
             start = end
             for t in range(start, len(outputList)):
@@ -911,7 +985,7 @@ class MplusPAoutput:
                     break
             self.fit = "\n".join(outputList[start:end])
             self.fit = removeBlanks(self.fit)
-
+            
         if (grouping == None): 
     # Unstandardized measurement model
             start = end
@@ -925,12 +999,13 @@ class MplusPAoutput:
                 for t in range(start, len(outputList)):
                     if (re.search(r"\bON\b", outputList[t]) or
         re.search(r"\bWITH\b", outputList[t]) or
-        re.search(r"\bMeans\b", outputList[t])):
+        re.search(r"\bMeans\b", outputList[t]) or
+        "STANDARDIZED" in outputList[t]):
                         end = t
                         break
                 self.measurement = "\n".join(outputList[start:end])
                 self.measurement = removeBlanks(self.measurement)
-    
+
     # Unstandardized coefficients
             start = end
             secexists = 0
@@ -941,13 +1016,15 @@ class MplusPAoutput:
                     break
             if (secexists == 1):
                 for t in range(start, len(outputList)):
-                    if (re.search(r"\bWITH\b", outputList[t]) or
-        re.search(r"\bMeans\b", outputList[t])):
+                    if (re.search(r"\bWITH\b", outputList[t]) 
+        or re.search(r"\bMeans\b", outputList[t])
+        or "QUALITY OF" in outputList[t] 
+        or "New/Additional Parameters" in outputList[t]):
                         end = t
                         break
                 self.coefficients = "\n".join(outputList[start:end])
                 self.coefficients = removeBlanks(self.coefficients)
-    
+
     # Unstandardized covariances
             start = end
             secexists = 0
@@ -958,34 +1035,38 @@ class MplusPAoutput:
                     break
             if (secexists == 1):
                 for t in range(start, len(outputList)):
-                    if (re.search(r"\bMeans\b", outputList[t])):
+                    if (re.search(r"\bMeans\b", outputList[t])
+        or "QUALITY OF" in outputList[t] 
+        or "New/Additional Parameters" in outputList[t]):
                         end = t
                         break
                 self.covariances = "\n".join(outputList[start:end])
                 self.covariances = removeBlanks(self.covariances)
-    
+
     # Unstandardized Descriptives
             start = end
             for t in range(start, len(outputList)):
                 if ("STANDARDIZED MODEL RESULTS" in outputList[t] or
-    "MODEL COMMAND" in outputList[t] or
-    "New/Additional Parameters" in outputList[t]):
+    "MODEL COMMAND" in outputList[t]
+     or "QUALITY OF" in outputList[t] 
+     or "New/Additional Parameters" in outputList[t]):
                     end = t
                     break
             self.descriptives = "\n".join(outputList[start:end])
             self.descriptives = removeBlanks(self.descriptives)
-    
+
     # New parameters
             start = end
             if ("New/Additional Parameters" in outputList[start]):
                 for t in range(start, len(outputList)):
                     if ("STANDARDIZED MODEL RESULTS" in outputList[t] or
+        "QUALITY OF" in outputList[t] or
         "MODEL COMMAND" in outputList[t]):
                         end = t
                         break
                 self.newParam = "\n".join(outputList[start:end])
                 self.newParam = removeBlanks(self.newParam)
-    
+
     # Standardized measurement model
             if ("MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings):
                 start = end
@@ -999,7 +1080,8 @@ class MplusPAoutput:
                     for t in range(start, len(outputList)):
                         if (re.search(r"\bON\b", outputList[t]) or
         re.search(r"\bWITH\b", outputList[t]) or
-        re.search(r"\bMeans\b", outputList[t])):
+        re.search(r"\bMeans\b", outputList[t]) or
+        "R-SQUARE" in outputList[t]):
                             end = t
                             break
                     self.Zmeasurement = "\n".join(outputList[start:end])
@@ -1016,7 +1098,8 @@ class MplusPAoutput:
                 if (secexists == 1):
                     for t in range(start, len(outputList)):
                         if (re.search(r"\bWITH\b", outputList[t]) or
-        re.search(r"\bMeans\b", outputList[t])):
+        re.search(r"\bMeans\b", outputList[t]) or
+        "R-SQUARE" in outputList[t]):
                             end = t
                             break
                     self.Zcoefficients = "\n".join(outputList[start:end])
@@ -1085,7 +1168,7 @@ class MplusPAoutput:
                         break
                 gO = "\n".join(outputList[start:end])
                 self.groupOutput += [removeBlanks(gO)]
-                
+            
 # Standardized model             
             self.groupZoutput = []         
 # Advancing to first group
@@ -1097,18 +1180,23 @@ class MplusPAoutput:
             for label in self.groupLabels:
                 start = end
                 for t in range(start + 1, len(outputList)):
-                    if ("Group" in outputList[t] or
-                            "R-SQUARE" in outputList[t]):
+                    if ("Group" in outputList[t] 
+                        or "R-SQUARE" 
+                        or "MODEL COMMAND" in outputList[t]):
                         end = t
                         break
                 gO = "\n".join(outputList[start:end])
                 self.groupZoutput += [removeBlanks(gO)]
-            
+                
 # R squares
         if ("MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings):            
             start = end
             for t in range(start, len(outputList)):
-                if ("QUALITY OF NUMERICAL RESULTS" in outputList[t]):
+                if ("QUALITY OF" in outputList[t] 
+or "TOTAL, TOTAL INDIRECT" in outputList[t] 
+or "CONFIDENCE INTERVALS" in outputList[t]
+or "MODIFICATION" in outputList[t]
+or "Beginning Time" in outputList[t]):
                     end = t
                     break
             self.r2 = "\n".join(outputList[start:end])
@@ -1132,20 +1220,94 @@ class MplusPAoutput:
                 for t in range(start, len(outputList)):
                     if ("Beginning Time" in outputList[t] 
 or "TECHNICAL" in outputList[t]
+or "CONFIDENCE INTERVALS OF MODEL" in outputList[t]
 or "MODIFICATION" in outputList[t]):
                         end = t-1
                         break
                 self.Zindirect = "\n".join(outputList[start:end])
                 self.Zindirect = removeBlanks(self.Zindirect)
-    
+
+# Bootstrap CIs
+            start = end
+            secexists = 0
+            for t in range(start, len(outputList)):
+                if (re.search(r"CONFIDENCE INTERVALS OF MODEL", outputList[t])):
+                    start = t
+                    secexists = 1
+                    break
+            if (secexists == 1):
+                for t in range(start, len(outputList)):
+                    if ("QUALITY OF NUMERICAL RESULTS" in outputList[t] 
+or "CONFIDENCE INTERVALS OF STANDARDIZED" in outputList[t] 
+or "CONFIDENCE INTERVALS OF TOTAL" in outputList[t]):
+                        end = t
+                        break
+                self.ci = "\n".join(outputList[start:end])
+                self.ci = removeBlanks(self.ci)
+
+# Standardized CIs
+            start = end
+            secexists = 0
+            for t in range(start, len(outputList)):
+                if (re.search(r"CONFIDENCE INTERVALS OF STANDARDIZED", outputList[t])):
+                    start = t
+                    secexists = 1
+                    break
+            if (secexists == 1):
+                for t in range(start, len(outputList)):
+                    if ("QUALITY OF NUMERICAL RESULTS" in outputList[t] 
+or "CONFIDENCE INTERVALS OF TOTAL" in outputList[t]
+or "Beginning Time" in outputList[t]):
+                        end = t
+                        break
+                self.Zci = "\n".join(outputList[start:end])
+                self.Zci = removeBlanks(self.Zci)
+
+# Bootstrap CIs for indirect effects
+            start = end
+            secexists = 0
+            for t in range(start, len(outputList)):
+                if (re.search(r"CONFIDENCE INTERVALS OF TOTAL", outputList[t])):
+                    start = t
+                    secexists = 1
+                    break
+            if (secexists == 1):
+                start = end
+                for t in range(start, len(outputList)):
+                    if ("QUALITY OF NUMERICAL RESULTS" in outputList[t] 
+or "CONFIDENCE INTERVALS OF STANDARDIZED TOTAL" in outputList[t]
+or "Beginning Time" in outputList[t]):
+                        end = t
+                        break
+                self.indirectci = "\n".join(outputList[start:end])
+                self.indirectci = removeBlanks(self.indirectci)
+
+# Standardized CIs for indirect effects
+            start = end
+            secexists = 0
+            for t in range(start, len(outputList)):
+                if (re.search(r"CONFIDENCE INTERVALS OF STANDARDIZED TOTAL", outputList[t])):
+                    start = t
+                    secexists = 1
+                    break
+            if (secexists == 1):
+                start = end
+                for t in range(start, len(outputList)):
+                    if ("QUALITY OF NUMERICAL RESULTS" in outputList[t] 
+or "Beginning Time" in outputList[t]):
+                        end = t
+                        break
+                self.Zindirectci = "\n".join(outputList[start:end])
+                self.Zindirectci = removeBlanks(self.Zindirectci)
+     
 # Modification indices
             for t in range(end, len(outputList)):
-                stest = 0
-                if ("MODEL MODIFICATION INDICES" in outputList[t]):
+                mitest = 0
+                if ("MODIFICATION" in outputList[t]):
                     start = t
                     mitest = 1
                     break
-            if (stest == 1):
+            if (mitest == 1):
                 for t in range(start, len(outputList)):
                     if ("Beginning Time" in outputList[t] or "TECHNICAL" in outputList[t]):
                         end = t-1
@@ -1189,13 +1351,15 @@ or "MODIFICATION" in outputList[t]):
                 self.Zcovariances = self.Zcovariances.replace(var1.upper(), var2)
             if (self.Zdescriptives != None):
                 self.Zdescriptives = self.Zdescriptives.replace(var1.upper(), var2)
-            if (self.groupOutput != None):
 
+            if (self.groupOutput != None):
                 for t in range(len(self.groupOutput)):
                     self.groupOutput[t] = self.groupOutput[t].replace(var1.upper(), var2)
             if (self.groupZoutput != None):
                 for t in range(len(self.groupZoutput)):
+                    print t, self.groupZoutput[t]
                     self.groupZoutput[t] = self.groupZoutput[t].replace(var1.upper(), var2)
+                    
             if (self.r2 != None):
                 self.r2 = self.r2.replace(var1.upper(), var2)
             if (self.indirect != None):
@@ -1243,6 +1407,34 @@ or "MODIFICATION" in outputList[t]):
             self.Zindirect = self.Zindirect.replace("Sum of indirect      ",
 "Sum of indirect                    ")
 
+# Confidence intervals
+        if (self.ci != None):
+            self.ci = self.ci.replace("Lower .5%", "   Lower .5%")
+        if (self.Zci != None):
+            self.Zci = self.Zci.replace("Lower .5%", "   Lower .5%")
+        if (self.indirectci != None):
+            self.indirectci = self.indirectci.replace("Lower .5%", "   Lower .5%")
+        if (self.Zindirectci != None):
+            self.Zindirectci = self.Zindirectci.replace("Lower .5%", "   Lower .5%")
+        if (self.ci != None or self.Zci != None or self.indirectci != None or self.Zindirectci != None):    
+            for var1, var2 in zip(Mplus, SPSS):
+                var1 += " "*(8-len(var1))
+                var1 = " " + var1 + " "
+                if (len(var2) < 12):
+                    var2 += " "*(12-len(var2))
+                else:
+                    var2 = var2[:12]
+                var2 = " " + var2 + " "            
+    
+                if (self.ci != None):
+                    self.ci = self.ci.replace(var1.upper(), var2)
+                if (self.Zci != None):
+                    self.Zci = self.Zci.replace(var1.upper(), var2)            
+                if (self.indirectci != None):
+                    self.indirectci = self.indirectci.replace(var1.upper(), var2)
+                if (self.Zindirectci != None):
+                    self.Zindirectci = self.Zindirectci.replace(var1.upper(), var2)
+                        
 # MI section
         if (self.mi != None and
 not ("THE STANDARD ERRORS OF THE MODEL PARAMETER ESTIMATES COULD NOT" 
@@ -1274,7 +1466,6 @@ in self.warnings)):
 
 # Print function
     def toSPSSoutput(self):
-        print 1, self.label
         spss.Submit("title '" + self.label + "'.")        
         spss.Submit("title 'SUMMARY'.")
         print self.summary
@@ -1306,7 +1497,6 @@ in self.warnings)):
             spss.Submit("title 'NEW/ADDITIONAL PARAMETERS'.")
             print self.header
             print self.newParam
-
         if (self.Zmeasurement != None):
             spss.Submit("title 'STANDARDIZED MEASUREMENT MODEL'.")
             print "Standardized"
@@ -1344,12 +1534,25 @@ in self.warnings)):
         if (self.Zindirect != None):
             spss.Submit("title 'STANDARDIZED INDIRECT EFFECTS'.")
             print self.Zindirect
+        if (self.ci != None):
+            spss.Submit("title 'UNSTANDARDIZED BOOTSTRAP CIs'.")
+            print self.ci
+        if (self.Zci != None):
+            spss.Submit("title 'STANDARDIZED BOOTSTRAP CIs'.")
+            print self.Zci
+        if (self.indirectci != None):
+            spss.Submit("title 'UNSTANDARDIZED INDIRECT CIs'.")
+            print self.indirectci
+        if (self.Zindirectci != None):
+            spss.Submit("title 'STANDARDIZED INDIRECT BOOTSTRAP CIs'.")
+            print self.Zindirectci            
         if (self.mi != None):
             spss.Submit("title 'MODIFICATION INDICES'.")
             print self.mi     
 
 # Save coefficients to dataset
-    def toSPSSdata(self, datasetName = "MPAcoefs", labelList = []):
+    def toSPSSdata(self, estimator, datasetName = "MPAcoefs", datasetIntercepts = True,
+labelList = []):
 # Determine active data set so we can return to it when finished
         activeName = spss.ActiveDataset()
 # Set up data set if it doesn't already exist
@@ -1363,14 +1566,26 @@ omsid='Dataset Display', subtype='Datasets')
             dsetname = datasetObj.name
             datasetObj.varlist.append("Outcome", 50)
             datasetObj.varlist.append("Predictor", 50)
-            datasetObj.varlist.append("b_Coefficient", 0)
-            datasetObj.varlist.append("b_SE", 0)
-            datasetObj.varlist.append("b_Ratio", 0)
-            datasetObj.varlist.append("b_p", 0)
-            datasetObj.varlist.append("beta_Coefficient", 0)
-            datasetObj.varlist.append("beta_SE", 0)
-            datasetObj.varlist.append("beta_Ratio", 0)
-            datasetObj.varlist.append("beta_p", 0)
+            if (estimator == "BAYES"):
+                datasetObj.varlist.append("b_Coefficient", 0)
+                datasetObj.varlist.append("b_PostSD", 0)
+                datasetObj.varlist.append("b_p", 0)
+                datasetObj.varlist.append("b_lower", 0)
+                datasetObj.varlist.append("b_upper", 0)
+                datasetObj.varlist.append("beta_Coefficient", 0)
+                datasetObj.varlist.append("beta_PostSD", 0)
+                datasetObj.varlist.append("beta_p", 0)
+                datasetObj.varlist.append("beta_lower", 0)
+                datasetObj.varlist.append("beta_upper", 0)                
+            else:
+                datasetObj.varlist.append("b_Coefficient", 0)
+                datasetObj.varlist.append("b_SE", 0)
+                datasetObj.varlist.append("b_Ratio", 0)
+                datasetObj.varlist.append("b_p", 0)
+                datasetObj.varlist.append("beta_Coefficient", 0)
+                datasetObj.varlist.append("beta_SE", 0)
+                datasetObj.varlist.append("beta_Ratio", 0)
+                datasetObj.varlist.append("beta_p", 0)
             spss.EndDataStep()
             submitstring = """dataset activate {0}.
 dataset name {1}.""".format(dsetname, datasetName)
@@ -1390,15 +1605,29 @@ dataset name {1}.""".format(dsetname, datasetName)
         spss.EndDataStep()
 
 # Set variables to f8.3
-        submitstring = "alter type b_Coefficient to beta_p (f8.3)."
+        if (estimator == "BAYES"):
+            submitstring = "alter type b_Coefficient to beta_upper (f8.3)."
+        else:
+            submitstring = "alter type b_Coefficient to beta_p (f8.3)."
         spss.Submit(submitstring)
 
+# Get intercepts
+        if (datasetIntercepts == True):
+            bInt = getIntercepts(self.descriptives)
+            zInt = getIntercepts(self.Zdescriptives)
+            
 # Get coefficients
         bCoef = getCoefficients(self.coefficients)
         zCoef = getCoefficients(self.Zcoefficients)
-        
+       
 # Determine values for dataset
         dataValues = []
+        if (datasetIntercepts == True and bInt != None):
+            for t in range(len(bInt)):
+                rowList = bInt[t]
+                rowList.extend(zInt[t][2:])
+                rowList.extend(labelList)
+                dataValues.append(rowList)       
         for t in range(len(bCoef)):
             rowList = bCoef[t]
             rowList.extend(zCoef[t][2:])
@@ -1419,7 +1648,7 @@ dataset name {1}.""".format(dsetname, datasetName)
         spss.EndDataStep()
 
 # Save indirect tests to dataset
-    def indirectToSPSSdata(self, datasetName = "MPAindirect", labelList = []):
+    def indirectToSPSSdata(self, estimator, datasetName = "MPAindirect", labelList = []):
 
 # Determine active data set so we can return to it when finished
         activeName = spss.ActiveDataset()
@@ -1435,14 +1664,26 @@ omsid='Dataset Display', subtype='Datasets')
             datasetObj.varlist.append("IndirectTest", 200)
             datasetObj.varlist.append("Path", 200)
             datasetObj.varlist.append("SpecificEffect", 0)
-            datasetObj.varlist.append("b_Coefficient", 0)
-            datasetObj.varlist.append("b_SE", 0)
-            datasetObj.varlist.append("b_Ratio", 0)
-            datasetObj.varlist.append("b_p", 0)
-            datasetObj.varlist.append("beta_Coefficient", 0)
-            datasetObj.varlist.append("beta_SE", 0)
-            datasetObj.varlist.append("beta_Ratio", 0)
-            datasetObj.varlist.append("beta_p", 0)
+            if (estimator == "BAYES"):
+                datasetObj.varlist.append("b_Coefficient", 0)
+                datasetObj.varlist.append("b_PostSD", 0)
+                datasetObj.varlist.append("b_p", 0)
+                datasetObj.varlist.append("b_lower", 0)
+                datasetObj.varlist.append("b_upper", 0)
+                datasetObj.varlist.append("beta_Coefficient", 0)
+                datasetObj.varlist.append("beta_PostSD", 0)
+                datasetObj.varlist.append("beta_p", 0)
+                datasetObj.varlist.append("beta_lower", 0)
+                datasetObj.varlist.append("beta_upper", 0)                
+            else:
+                datasetObj.varlist.append("b_Coefficient", 0)
+                datasetObj.varlist.append("b_SE", 0)
+                datasetObj.varlist.append("b_Ratio", 0)
+                datasetObj.varlist.append("b_p", 0)
+                datasetObj.varlist.append("beta_Coefficient", 0)
+                datasetObj.varlist.append("beta_SE", 0)
+                datasetObj.varlist.append("beta_Ratio", 0)
+                datasetObj.varlist.append("beta_p", 0)
             spss.EndDataStep()
             submitstring = """dataset activate {0}.
 dataset name {1}.""".format(dsetname, datasetName)
@@ -1495,15 +1736,17 @@ def MplusPathAnalysis(inpfile, modellabel = "MplusPathAnalysis",
 runModel = True, viewOutput = True, suppressSPSS = False, 
 latent = None, latentFixed = None,
 model = None, xwith = None, means = None,
-covar = None, covEndo = False, covExo = True, MLR = False,
+covar = None, covEndo = False, covExo = True, estimator = None,
 useobservations = None, subpopulation = None, indirect = None, 
 identifiers = None, meanIdentifiers = None, covIdentifiers = None, 
 wald = None, constraint = None, montecarlo = None,
 bootstrap = None, repse = None,
 categorical = None, censored = None, count = None, nominal = None,
-cluster = None, grouping = None, weight = None, auxiliary = None, 
-datasetName = None, indDatasetName = None, datasetLabels = [], 
-miThreshold = 10, waittime = 5):
+idvariable = None, cluster = None, grouping = None, weight = None, auxiliary = None, 
+datasetName = None, datasetIntercepts = True, 
+indDatasetName = None, datasetLabels = [], 
+miThreshold = 10, savedata = None, saveFscores = False, 
+waittime = 5):
 
     spss.Submit("display scratch.")
 
@@ -1541,6 +1784,24 @@ miThreshold = 10, waittime = 5):
     if (not os.path.exists(outdir)):
         print("Error: Output directory does not exist")
         error = 1
+    if (estimator != None):
+        estimator = estimator.upper()
+        if (estimator not in ["ML",
+"MLM",
+"MLMV",
+"MLR",
+"MLF",
+"MUML",
+"WLS",
+"WLSM",
+"WLSMV",
+"ULS",
+"ULSMV",
+"GLS",
+"BAYES"]):
+            print("Error: Estimator not valid")
+            error = 1
+                    
     if (latent != None):
         variableError = 0
         for equation in latent:
@@ -1565,7 +1826,10 @@ miThreshold = 10, waittime = 5):
             for var in equation[1:]:
                 if (var.upper() not in SPSSvariablesCaps):
                     variableError = 1
-                    print "Missing " + var
+                    for latentvar in latent:
+                        if (var.upper() == latentvar[0].upper()):
+                            variableError = 0
+                        print "Missing " + var
         if (variableError == 1):
             print("Error: Variable listed in latent variable definition not in current data set")
             error = 1
@@ -1756,6 +2020,14 @@ miThreshold = 10, waittime = 5):
                 z = re.compile(s, re.IGNORECASE)
                 MplusSubpopulation = z.sub(m, MplusSubpopulation)
 
+# Convert idvariable to Mplus
+        if (idvariable == None):
+            MplusIdvariable = None
+        else:
+            for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                if (idvariable.upper() == s):
+                    MplusIdvariable = m
+
 # Convert cluster variable to Mplus
         if (cluster == None):
             MplusCluster = None
@@ -1812,13 +2084,14 @@ MplusCensored, MplusCount, MplusNominal]
         pathProgram.setData(dataname)
         pathProgram.setVariable(MplusVariables, MplusLatent, MplusModel, 
 MplusXwith, MplusUseobservations, MplusSubpopulation,
-MplusCategorical, MplusCensored, MplusCount, MplusNominal,
+MplusCategorical, MplusCensored, MplusCount, MplusNominal, MplusIdvariable,
 MplusCluster, MplusWeight, MplusAuxiliary, MplusGrouping)
-        pathProgram.setAnalysis(MplusXwith, MplusCluster, MplusWeight, MLR, montecarlo, bootstrap, repse)
+        pathProgram.setAnalysis(MplusXwith, MplusCluster, MplusWeight, estimator, montecarlo, bootstrap, repse)
         pathProgram.setModel(MplusLatent, MplusLatentFixed, MplusModel, MplusXwith, MplusMeans,
 MplusCovar, covEndo, covExo, MplusIndirect, MplusIdentifiers, 
 MplusMeanIdentifiers, MplusCovIdentifiers, wald)
         pathProgram.setConstraint(constraint)
+        pathProgram.setSavedata(savedata, saveFscores)
         pathProgram.setOutput("stdyx;\nmodindices({0});".format(miThreshold), bootstrap)
         pathProgram.write(outdir + fname + ".inp")
 
@@ -1847,7 +2120,7 @@ MplusMeanIdentifiers, MplusCovIdentifiers, wald)
 
         if (viewOutput == True):
             pathOutput = MplusPAoutput(modellabel, outdir + fname + ".out", 
-    MplusVariables, SPSSvariables, MplusGrouping)
+    MplusVariables, SPSSvariables, MplusGrouping, estimator)
             pathOutput.toSPSSoutput()
 
 # Redirect output
@@ -1859,12 +2132,13 @@ MplusMeanIdentifiers, MplusCovIdentifiers, wald)
 
     # Create coefficient dataset
             if (datasetName != None):
-                pathOutput.toSPSSdata(datasetName, datasetLabels)
+                pathOutput.toSPSSdata(estimator, datasetName, datasetIntercepts,
+datasetLabels)
 
     # Create indirect effects dataset
             if (indDatasetName != None):
                 if (pathOutput.indirect != None):
-                    pathOutput.indirectToSPSSdata(indDatasetName, datasetLabels)
+                    pathOutput.indirectToSPSSdata(estimator, indDatasetName, datasetLabels)
 
 # Restore output
             if (suppressSPSS == True):
@@ -1959,5 +2233,20 @@ categorical, censored, count, nominal
 * 2021-04-08 Added latentFixed argument
 *    Ensured that each latent variable only added to SPSSvariables once
 * 2021-04-09 Added modellabel argument
-COMMENT BOOKMARK;LINE_NUM=1174;ID=1.
-COMMENT BOOKMARK;LINE_NUM=1329;ID=2.
+* 2021-05-07 Added estimator argument/dropped MLR
+* 2021-05-09 Changed output and dataset headers for Bayes estimation
+* 2021-06-28 R-square section now prints with a Bayes model
+* 2021-06-28a Added CIs to SPSS output
+* 2021-06-28b Corrected variable names in CI output
+* 2021-07-06 Included intercepts in coefficient data set
+*    Added datasetIntercepts argument
+* 2021-07-11 Corrected parsing of output for CFAs
+* 2021-07-12 Corrected error when there are no intercepts but
+*    datasetIntercepts = True
+* 2021-08-08 Added savedata and saveFscores arguments
+* 2021-08-09 Added idvariable argument
+* 2021-08-12 Revised output parsing
+* 2021-10-04 Corrected mulitgroup output extraction when model doesn't converge
+* 2021-11-13 Removed extra print statements
+* 2021-12-21 Allowed hierarchical latents
+COMMENT BOOKMARK;LINE_NUM=554;ID=1.
