@@ -1357,7 +1357,6 @@ or "Beginning Time" in outputList[t]):
                     self.groupOutput[t] = self.groupOutput[t].replace(var1.upper(), var2)
             if (self.groupZoutput != None):
                 for t in range(len(self.groupZoutput)):
-                    print t, self.groupZoutput[t]
                     self.groupZoutput[t] = self.groupZoutput[t].replace(var1.upper(), var2)
                     
             if (self.r2 != None):
@@ -1829,6 +1828,7 @@ waittime = 5):
                     for latentvar in latent:
                         if (var.upper() == latentvar[0].upper()):
                             variableError = 0
+                    if variableError == 1
                         print "Missing " + var
         if (variableError == 1):
             print("Error: Variable listed in latent variable definition not in current data set")
@@ -2249,4 +2249,5 @@ categorical, censored, count, nominal
 * 2021-10-04 Corrected mulitgroup output extraction when model doesn't converge
 * 2021-11-13 Removed extra print statements
 * 2021-12-21 Allowed hierarchical latents
+* 2021-12-22 Removed extra print commands
 COMMENT BOOKMARK;LINE_NUM=554;ID=1.
