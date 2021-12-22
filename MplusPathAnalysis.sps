@@ -1828,7 +1828,7 @@ waittime = 5):
                     for latentvar in latent:
                         if (var.upper() == latentvar[0].upper()):
                             variableError = 0
-                    if variableError == 1
+                    if (variableError == 1):
                         print "Missing " + var
         if (variableError == 1):
             print("Error: Variable listed in latent variable definition not in current data set")
@@ -1847,7 +1847,7 @@ waittime = 5):
                         for xwithvar in xwith:
                             if (var.upper() == xwithvar[0].upper()):
                                 variableError = 0
-                    if variableError == 1:
+                    if (variableError == 1):
                         print "Missing " + var
                                 
         if (variableError == 1):
@@ -2250,4 +2250,3 @@ categorical, censored, count, nominal
 * 2021-11-13 Removed extra print statements
 * 2021-12-21 Allowed hierarchical latents
 * 2021-12-22 Removed extra print commands
-COMMENT BOOKMARK;LINE_NUM=554;ID=1.
