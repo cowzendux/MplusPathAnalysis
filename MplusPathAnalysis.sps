@@ -952,8 +952,8 @@ class MplusPAoutput:
         for t in range(len(outputList)):
             if ("SUMMARY OF ANALYSIS" in outputList[t]):
                 start = t
-            if ("Number of continuous latent variables" in outputList[t]):
-                end = t
+            if ("Observed dependent variables" in outputList[t]):
+                end = t-1
         self.summary = "\n".join(outputList[start:end+1])
         
 # Warnings
@@ -1450,7 +1450,7 @@ in self.warnings)):
             newMI = []
             miLines = self.mi.split("\n")
             for line in miLines:
-                if (" ON " in line or " BY " in line or " WITH " in line):
+                if ((" ON " in line or " BY " in line or " WITH " in line) and "/" not in line):
                     miWords = line.split()
                     newLine = miWords[0] + " "*(23-len(miWords[0]))
                     newLine += " " + miWords[1] + " "*(5-len(miWords[1]))
@@ -2250,3 +2250,5 @@ categorical, censored, count, nominal
 * 2021-11-13 Removed extra print statements
 * 2021-12-21 Allowed hierarchical latents
 * 2021-12-22 Removed extra print commands
+* 2021-12-27 Fixed error with MI section in MGAs
+* 2022-01-04 Included number of categorical latent variables in summary
