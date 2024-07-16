@@ -299,7 +299,7 @@ waittime = 10)
 * reported in the output. The program will wait 10 seconds after starting to 
 * run the Mplus program before it tries  to read the results back into SPSS.
 
-set printback = off.
+*set printback = off.
 begin program python3.
 import spss, spssaux, os, sys, time, re, tempfile, SpssClient
 from subprocess import Popen, PIPE
@@ -1239,7 +1239,7 @@ class MplusPAoutput:
                     break
             if secexists == 1:
                 for t in range(start, len(outputList)):
-                    if "QUALITY OF NUMERICAL RESULTS" in outputList[t] or "CONFIDENCE INTERVALS OF TOTAL" in outputList[t] or "Beginning Time" in outputList[t]):
+                    if "QUALITY OF NUMERICAL RESULTS" in outputList[t] or "CONFIDENCE INTERVALS OF TOTAL" in outputList[t] or "Beginning Time" in outputList[t]:
                         end = t
                         break
                 self.Zci = "\n".join(outputList[start:end])
@@ -1256,7 +1256,7 @@ class MplusPAoutput:
             if secexists == 1:
                 start = end
                 for t in range(start, len(outputList)):
-                    if "QUALITY OF NUMERICAL RESULTS" in outputList[t] or "CONFIDENCE INTERVALS OF STANDARDIZED TOTAL" in outputList[t] or "Beginning Time" in outputList[t]):
+                    if "QUALITY OF NUMERICAL RESULTS" in outputList[t] or "CONFIDENCE INTERVALS OF STANDARDIZED TOTAL" in outputList[t] or "Beginning Time" in outputList[t]:
                         end = t
                         break
                 self.indirectci = "\n".join(outputList[start:end])
@@ -2215,3 +2215,4 @@ categorical, censored, count, nominal
 * 2024-01-03 Renamed twoLevel function so it doesn't conflict with MTL
 * 2024-05-28 Aligned tabs
 * 2024-05-28a Converted to Python 3
+* 2024-07-05 Removed extra parentheses
