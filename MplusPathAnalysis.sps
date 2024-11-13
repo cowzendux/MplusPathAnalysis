@@ -9,11 +9,12 @@
 * parts of the Mplus output into the SPSS output window.
 
 **** Usage: MplusPathAnalysis(inpfile, modellabel, runModel, viewOutput, suppressSPSS,
-latent, latentFixed, model, xwith, means, covar, covEndo, covExo, estimator, starts,
+latent, latentFixed, latentIdentifiers, model, xwith, means, covar, covEndo, covExo, estimator, starts,
 useobservations, subpopulation, indirect, identifiers, meanIdentifiers, covIdentifiers,
 wald, constraint, montecarlo, bootstrap, repse,
 categorical, censored, count, nominal, idvariable, cluster, grouping, weight, 
-datasetName, datasetIntercepts, indDatasetName, datasetLabels, miThreshold,
+datasetName, datasetIntercepts, indDatasetName, newDatasetName,
+datasetLabels, miThreshold,
 savedata, saveFscores, processors, waittime)
 **** "inpfile" is a string identifying the directory and filename of
 * Mplus input file to be created by the program. This filename must end with
@@ -54,6 +55,12 @@ savedata, saveFscores, processors, waittime)
 * the latent statement. To do this, you may need to separate the 
 * observed values for a single latent variable into different lists. This defaults to None, 
 * which does not assign any fixed latent coefficients. 
+**** "latentIdentifiers" is an optional argument provides a list of lists pairing 
+,* latent coefficients with identifiers that can be used as part of a Wald Z test or
+* a Model Constraint calculation, or a model with parameters forced to be equal.
+* The coefficients part must specifically match a list in the "latent" statement.
+* To do this, you may need to separate the predictors for a single latent variable 
+* into different lists. This defaults to None, which does not assign any identifiers. 
 **** "model" is a list of lists identifying the equations in your
 * path model.  First, you create a set of lists that each have the outcome as
 * the first element and then have the predictors as the following elements.
@@ -195,6 +202,9 @@ savedata, saveFscores, processors, waittime)
 **** "indDatasetName" is an optional argument that identifies the name of
 * an SPSS dataset that should be used to record the tests of the indirect
 * effects. This will do nothing if no indirect tests are defined.
+**** "newDatasetName" is an optional argument that identifiers the name of
+* an SPSS dataset that should be used to record the tests of new/additional
+* parameters created using the "model contrast" command.
 **** "datasetLabels" is an optional argument that identifies a list of
 * labels that would be applied to the datasets containing coefficients 
 * or tests of the indirect effects. This can be useful if you are appending 
@@ -299,7 +309,7 @@ waittime = 10)
 * reported in the output. The program will wait 10 seconds after starting to 
 * run the Mplus program before it tries  to read the results back into SPSS.
 
-*set printback = off.
+set printback = off.
 begin program python3.
 import spss, spssaux, os, sys, time, re, tempfile, SpssClient
 from subprocess import Popen, PIPE
@@ -648,8 +658,8 @@ class MplusPAprogram:
         if processors is not None:
             self.analysis += "\nprocessors = {0};".format(processors)
 
-    def setModel(self, MplusLatent, MplusLatentFixed, MplusModel, MplusXwith,
-                 MplusMeans, MplusCovar, cEndo, cExo, MplusIndirect, MplusIdentifiers,
+    def setModel(self, MplusLatent, MplusLatentFixed, MplusLatentIdentifiers, MplusModel, 
+                 MplusXwith, MplusMeans, MplusCovar, cEndo, cExo, MplusIndirect, MplusIdentifiers,
                  MplusMeanIdentifiers, MplusCovIdentifiers, wald):
         # Latent variable definitions
         if MplusLatent is not None:
@@ -665,6 +675,10 @@ class MplusPAprogram:
                     for t in MplusLatentFixed:
                         if equation == t[0]:
                             curline += "@" + str(t[1])
+                if MplusLatentIdentifiers is not None:
+                    for id in MplusLatentIdentifiers:
+                        if equation == id[0]:
+                            curline += " (" + id[1] + ")"                            
                 self.model += curline + ";\n"
 
         # Xwith statements
@@ -926,6 +940,26 @@ def getIndirect(outputBlock):
                             line.append(float(j))
                     coefficients.append(line)
     return coefficients
+    
+def getNewParam(outputBlock):
+    if outputBlock is None:
+        return None
+    else:
+        outputBlock2 = outputBlock.replace("\r", "")
+        outputBlock2 = outputBlock2.replace("*********", "-999")
+        blockList = outputBlock2.split("\n")
+        p = []
+        for t in range(len(blockList)):
+            values1 = blockList[t].split(" ")
+            values2 = [i for i in values1 if i]
+
+            if len(values2) > 2 and values2[0] != "Estimate":
+                line = [values2[0]]
+                for j in values2[1:]:
+                    if j != "*":
+                        line.append(float(j))
+                p.append(line)
+        return p
 
 class MplusPAoutput:
     def __init__(self, modellabel, filename, Mplus, SPSS, grouping, estimator, starts):
@@ -971,7 +1005,7 @@ class MplusPAoutput:
             if "Observed dependent variables" in outputList[t]:
                 end = t - 1
         self.summary = "\n".join(outputList[start:end + 1])
-        
+
         # Warnings
         for t in range(len(outputList)):
             if "Number of clusters" in outputList[t] or "Covariance Coverage" in outputList[t]:
@@ -991,7 +1025,7 @@ class MplusPAoutput:
         self.warnings = removeBlanks(self.warnings)
 
         if "MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings:
-        
+
             # Fit statistics
             start = end
             for t in range(start, len(outputList)):
@@ -1017,7 +1051,7 @@ class MplusPAoutput:
                         break
                 self.measurement = "\n".join(outputList[start:end])
                 self.measurement = removeBlanks(self.measurement)
-        
+
             # Unstandardized coefficients
             start = end
             secexists = 0
@@ -1033,7 +1067,7 @@ class MplusPAoutput:
                         break
                 self.coefficients = "\n".join(outputList[start:end])
                 self.coefficients = removeBlanks(self.coefficients)
-        
+
             # Unstandardized covariances
             start = end
             secexists = 0
@@ -1049,7 +1083,7 @@ class MplusPAoutput:
                         break
                 self.covariances = "\n".join(outputList[start:end])
                 self.covariances = removeBlanks(self.covariances)
-        
+
             # Unstandardized Descriptives
             start = end
             for t in range(start, len(outputList)):
@@ -1058,7 +1092,7 @@ class MplusPAoutput:
                     break
             self.descriptives = "\n".join(outputList[start:end])
             self.descriptives = removeBlanks(self.descriptives)
-        
+
             # New parameters
             start = end
             if "New/Additional Parameters" in outputList[start]:
@@ -1068,7 +1102,7 @@ class MplusPAoutput:
                         break
                 self.newParam = "\n".join(outputList[start:end])
                 self.newParam = removeBlanks(self.newParam)
-        
+
             # Standardized measurement model
             if "MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings or starts is not None:
                 start = end
@@ -1085,7 +1119,7 @@ class MplusPAoutput:
                             break
                     self.Zmeasurement = "\n".join(outputList[start:end])
                     self.Zmeasurement = removeBlanks(self.Zmeasurement)
-        
+
                 # Standardized coefficients
                 start = end
                 secexists = 0
@@ -1101,7 +1135,7 @@ class MplusPAoutput:
                             break
                     self.Zcoefficients = "\n".join(outputList[start:end])
                     self.Zcoefficients = removeBlanks(self.Zcoefficients)
-        
+
                 # Standardized covariances
                 start = end
                 secexists = 0
@@ -1179,17 +1213,21 @@ class MplusPAoutput:
                         break
                 gO = "\n".join(outputList[start:end])
                 self.groupZoutput += [removeBlanks(gO)]
-                
-        if "MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings:            
+
+        if "MODEL ESTIMATION TERMINATED NORMALLY" in self.warnings:
             # R squares
             start = end
             for t in range(start, len(outputList)):
-                if "QUALITY OF" in outputList[t] or "TOTAL, TOTAL INDIRECT" in outputList[t] or "CONFIDENCE INTERVALS" in outputList[t] or "MODIFICATION" in outputList[t] or "Beginning Time" in outputList[t]:
+                if ("QUALITY OF" in outputList[t] 
+                    or "TOTAL, TOTAL INDIRECT" in outputList[t] 
+                    or "CONFIDENCE INTERVALS" in outputList[t] 
+                    or "MODIFICATION" in outputList[t] 
+                    or "Beginning Time" in outputList[t]
+                    or "TECHNICAL 1" in outputList[t]):
                     end = t
                     break
             self.r2 = "\n".join(outputList[start:end])
             self.r2 = removeBlanks(self.r2)
-        
 
             # Indirect effects
             stest = 0
@@ -1395,6 +1433,7 @@ class MplusPAoutput:
             self.indirectci = self.indirectci.replace("Lower .5%", "   Lower .5%")
         if self.Zindirectci is not None:
             self.Zindirectci = self.Zindirectci.replace("Lower .5%", "   Lower .5%")
+
         if self.ci is not None or self.Zci is not None or self.indirectci is not None or self.Zindirectci is not None:    
             for var1, var2 in zip(Mplus, SPSS):
                 var1 += " " * (8 - len(var1))
@@ -1428,7 +1467,7 @@ class MplusPAoutput:
             newMI = []
             miLines = self.mi.split("\n")
             for line in miLines:
-                if " ON " in line or " BY " in line or " WITH " in line and "/" not in line:
+                if (" ON " in line or " BY " in line or " WITH " in line) and "/" not in line:
                     miWords = line.split()
                     newLine = miWords[0] + " " * (23 - len(miWords[0]))
                     newLine += " " + miWords[1] + " " * (5 - len(miWords[1]))
@@ -1705,10 +1744,82 @@ class MplusPAoutput:
         datasetObj = spss.Dataset(name=activeName)
         spss.SetActive(datasetObj)
         spss.EndDataStep()
+
+    # Save new/additional parameters to dataset
+    def newToSPSSdata(self, estimator="ML", datasetName="MPAnew", labelList=[]):
+        # Determine active data set so we can return to it when finished
+        activeName = spss.ActiveDataset()
+        # Set up data set if it doesn't already exist
+        tag, err = spssaux.createXmlOutput('Dataset Display', omsid='Dataset Display', subtype='Datasets')
+        datasetList = spssaux.getValuesFromXmlWorkspace(tag, 'Datasets')
+    
+        if datasetName not in datasetList:
+            spss.StartDataStep()
+            datasetObj = spss.Dataset(name=None)
+            dsetname = datasetObj.name
+            datasetObj.varlist.append("Parameter", 50)
+            if estimator == "BAYES":
+                datasetObj.varlist.append("Estimate", 0)
+                datasetObj.varlist.append("PostSD", 0)
+                datasetObj.varlist.append("p", 0)
+                datasetObj.varlist.append("lower", 0)
+                datasetObj.varlist.append("upper", 0)
+            else:
+                datasetObj.varlist.append("estimate", 0)
+                datasetObj.varlist.append("SE", 0)
+                datasetObj.varlist.append("Ratio", 0)
+                datasetObj.varlist.append("p", 0)
+            spss.EndDataStep()
+            submitstring = """dataset activate {0}.
+    dataset name {1}.""".format(dsetname, datasetName)
+            spss.Submit(submitstring)
+    
+        spss.StartDataStep()
+        datasetObj = spss.Dataset(name=datasetName)
+        spss.SetActive(datasetObj)
+    
+        # Label variables
+        variableList = []
+        for t in range(spss.GetVariableCount()):
+            variableList.append(spss.GetVariableName(t))
+        for t in range(len(labelList)):
+            if "label{0}".format(str(t)) not in variableList:
+                datasetObj.varlist.append("label{0}".format(str(t)), 50)
+        spss.EndDataStep()
+    
+        # Set variables to f8.3
+        if estimator == "BAYES":
+            submitstring = "alter type Estimate to upper (f8.3)."
+        else:
+            submitstring = "alter type Estimate to p (f8.3)."
+        spss.Submit(submitstring)
+    
+        # Get coefficients
+        param = getNewParam(self.newParam)
+    
+        # Determine values for dataset
+        dataValues = []
+        for t in range(len(param)):
+            rowList = param[t]
+            rowList.extend(labelList)
+            dataValues.append(rowList)
+    
+        # Put values in dataset
+        spss.StartDataStep()
+        datasetObj = spss.Dataset(name=datasetName)
+        for t in dataValues:
+            datasetObj.cases.append(t)
+        spss.EndDataStep()
+    
+        # Return to original data set
+        spss.StartDataStep()
+        datasetObj = spss.Dataset(name=activeName)
+        spss.SetActive(datasetObj)
+        spss.EndDataStep()
     
 def MplusPathAnalysis(inpfile, modellabel="MplusPathAnalysis",
                       runModel=True, viewOutput=True, suppressSPSS=False, 
-                      latent=None, latentFixed=None,
+                      latent=None, latentFixed=None, latentIdentifiers=None,
                       model=None, xwith=None, means=None,
                       covar=None, covEndo=False, covExo=True, estimator=None,
                       starts=None,
@@ -1719,7 +1830,7 @@ def MplusPathAnalysis(inpfile, modellabel="MplusPathAnalysis",
                       categorical=None, censored=None, count=None, nominal=None,
                       idvariable=None, cluster=None, grouping=None, weight=None, auxiliary=None, 
                       datasetName=None, datasetIntercepts=True, 
-                      indDatasetName=None, datasetLabels=[], 
+                      indDatasetName=None, newDatasetName=None, datasetLabels=[], 
                       miThreshold=10, savedata=None, saveFscores=False, 
                       processors=None, waittime=5):
 
@@ -1858,6 +1969,22 @@ def MplusPathAnalysis(inpfile, modellabel="MplusPathAnalysis",
                         if fixedEquations[t][i] == s:
                             fixedEquations[t][i] = m
                 MplusLatentFixed.append([fixedEquations[t], latentFixed[t][1]])
+                
+        # Convert latentIdentifiers to Mplus
+        if latentIdentifiers is None:
+            MplusLatentIdentifiers = None
+        else:
+            MplusLatentIdentifiers = []
+            latentIdEquations = []
+            for t in latentIdentifiers:
+                j = [i.upper() for i in t[0]]
+                latentIdEquations.append(j)
+            for t in range(len(latentIdEquations)):
+                for i in range(len(latentIdEquations[t])):
+                    for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                        if latentIdEquations[t][i] == s:
+                            latentIdEquations[t][i] = m
+                MplusLatentIdentifiers.append([latentIdEquations[t], latentIdentifiers[t][1]])                
 
         # Define model using Mplus variables
         if model is None:
@@ -2041,7 +2168,8 @@ def MplusPathAnalysis(inpfile, modellabel="MplusPathAnalysis",
                                   MplusCluster, MplusWeight, MplusAuxiliary, MplusGrouping)
         pathProgram.setAnalysis(MplusXwith, MplusCluster, MplusWeight, estimator,
                                 starts, montecarlo, bootstrap, repse, processors)
-        pathProgram.setModel(MplusLatent, MplusLatentFixed, MplusModel, MplusXwith, MplusMeans,
+        pathProgram.setModel(MplusLatent, MplusLatentFixed, MplusLatentIdentifiers,
+                            MplusModel, MplusXwith, MplusMeans,
                              MplusCovar, covEndo, covExo, MplusIndirect, MplusIdentifiers, 
                              MplusMeanIdentifiers, MplusCovIdentifiers, wald)
         pathProgram.setConstraint(constraint)
@@ -2092,6 +2220,11 @@ def MplusPathAnalysis(inpfile, modellabel="MplusPathAnalysis",
                 if indDatasetName is not None:
                     if pathOutput.indirect is not None:
                         pathOutput.indirectToSPSSdata(estimator, indDatasetName, datasetLabels)
+                        
+                # Create dataset for new/additional parameters
+                if newDatasetName is not None:
+                    if constraint is not None:
+                        pathOutput.newToSPSSdata(estimator, newDatasetName, datasetLabels)
         
                 # Restore output
                 if suppressSPSS:
@@ -2216,3 +2349,8 @@ categorical, censored, count, nominal
 * 2024-05-28 Aligned tabs
 * 2024-05-28a Converted to Python 3
 * 2024-07-05 Removed extra parentheses
+* 2024-09-10 Added option to save new/additional parameters
+* 2024-10-23 Added latentIdentifiers
+* 2024-11-12 Corrected parenthesis error in MI
+* 2024-11-13 Set Estimator in getNewParam to default to ML
+COMMENT BOOKMARK;LINE_NUM=963;ID=1.
