@@ -8,7 +8,7 @@
 * that will perform the path analysis in Mplus, then loads the important
 * parts of the Mplus output into the SPSS output window.
 
-**** Usage: MplusPathAnalysis(inpfile, modellabel, runModel, viewOutput, suppressSPSS,
+**** Usage: MplusPathAnalysis(modellabel, inpfile, inpShow, runModel, viewOutput, suppressSPSS,
 latent, latentFixed, latentIdentifiers, model, xwith, means, covar, covEndo, covExo, estimator, starts,
 useobservations, subpopulation, indirect, identifiers, meanIdentifiers, covIdentifiers,
 wald, constraint, montecarlo, bootstrap, repse,
@@ -16,12 +16,15 @@ categorical, censored, count, nominal, idvariable, cluster, grouping, weight,
 datasetName, datasetIntercepts, indDatasetName, newDatasetName,
 datasetLabels, miThreshold,
 savedata, saveFscores, processors, waittime)
+**** "modellabel" is a string that indicates what label should be added to the output at the
+* top of your model. If this is not specified, the label defaults to "MplusPathAnalysis"
 **** "inpfile" is a string identifying the directory and filename of
 * Mplus input file to be created by the program. This filename must end with
 * .inp . The data file will automatically be saved to the same directory. This
-* argument is required.
-**** "modellabel" is a string that indicates what label should be added to the output at the
-* top of your model. If this is not specified, the label defaults to "MplusPathAnalysis"
+* argument defaults to "Mplus/model.inp", assuming there is an "Mplus" subdirectory
+* off of the analysis directory.
+**** "inpShow" is a boolean argument indicating whether you want a copy of the Mplus .inp
+* file to be included in the SPSS output log. By default the .inp is not included.
 **** "runModel" is a boolean argument indicating whether or not you want the 
 * program to actually run the program it creates based on the model you define. 
 * You may choose to not run the model when you want to use the program to 
@@ -819,8 +822,19 @@ class MplusPAprogram:
             for sec in sectionList:
                 if sec[-2:] != ":\n":
                     outfile.write(sec)
-                    outfile.write("\n\n")
+                    outfile.write("\n")
 
+    def inpOutput(self):
+        # Ouput .inp file to SPSS output log
+        sectionList = [self.title, self.data, self.variable, self.define,
+               self.analysis, self.model, self.constraint, self.output, self.savedata, 
+               self.plot, self.montecarlo]
+        inpText = ""
+        for sec in sectionList:
+            if sec[-2:] != ":\n":
+                inpText += sec + "\n"
+        return(inpText)
+        
 def batchfile(directory, filestem):
     # Write batch file
     with open(os.path.join(directory, filestem + ".bat"), "w") as batchFile:
@@ -962,7 +976,7 @@ def getNewParam(outputBlock):
         return p
 
 class MplusPAoutput:
-    def __init__(self, modellabel, filename, Mplus, SPSS, grouping, estimator, starts):
+    def __init__(self, modellabel, filename, inp, Mplus, SPSS, grouping, estimator, starts):
         self.label = modellabel
         with open(filename, "rb") as infile:
             fileText = infile.read().decode('utf-8')
@@ -974,6 +988,7 @@ class MplusPAoutput:
         else:
             self.header = """                                                                   Two-Tailed 
                                    Estimate       S.E.  Est./S.E.    P-Value"""
+        self.inp = None
         self.summary = None
         self.warnings = None
         self.fit = None
@@ -997,6 +1012,9 @@ class MplusPAoutput:
         self.indirect = None
         self.Zindirect = None
         self.mi = None
+        
+        # Mplus .inp file
+        self.inp = inp
 
         # Summary
         for t in range(len(outputList)):
@@ -1483,6 +1501,9 @@ class MplusPAoutput:
     # Print function
     def toSPSSoutput(self):
         spss.Submit("title '" + self.label + "'.")
+        if self.inp is not None:
+            spss.Submit("title 'MPLUS SYNTAX'.")
+            print(self.inp)
         spss.Submit("title 'SUMMARY'.")
         print(self.summary)
         spss.Submit("title 'WARNINGS'.")
@@ -1817,7 +1838,7 @@ class MplusPAoutput:
         spss.SetActive(datasetObj)
         spss.EndDataStep()
     
-def MplusPathAnalysis(inpfile, modellabel="MplusPathAnalysis",
+def MplusPathAnalysis(modellabel="MplusPathAnalysis", inpfile="Mplus/model.inp", inpShow=False, 
                       runModel=True, viewOutput=True, suppressSPSS=False, 
                       latent=None, latentFixed=None, latentIdentifiers=None,
                       model=None, xwith=None, means=None,
@@ -2199,9 +2220,13 @@ def MplusPathAnalysis(inpfile, modellabel="MplusPathAnalysis",
             if suppressSPSS:
                 submitstring = """OMSEND TAG = 'NoJunk'."""
                 spss.Submit(submitstring)
-        
+
+            # Parse output
+            inpText = None
+            if inpShow == True:
+                inpText = pathProgram.inpOutput()                    
             if viewOutput:
-                pathOutput = MplusPAoutput(modellabel, os.path.join(outdir, fname + ".out"), 
+                pathOutput = MplusPAoutput(modellabel, os.path.join(outdir, fname + ".out"), inpText,
                                            MplusVariables, SPSSvariables, MplusGrouping, estimator, starts)
                 pathOutput.toSPSSoutput()
         
@@ -2353,4 +2378,6 @@ categorical, censored, count, nominal
 * 2024-10-23 Added latentIdentifiers
 * 2024-11-12 Corrected parenthesis error in MI
 * 2024-11-13 Set Estimator in getNewParam to default to ML
-COMMENT BOOKMARK;LINE_NUM=963;ID=1.
+* 2024-11-13a Added inpShow argument
+
+COMMENT BOOKMARK;LINE_NUM=977;ID=1.
