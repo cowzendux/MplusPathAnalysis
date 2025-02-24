@@ -171,8 +171,10 @@ savedata, saveFscores, processors, waittime)
 * that should be treated as categorical by Mplus. Note that what Mplus
 * calls categorical is typically called "ordinal" in other places. Use the
 * "nominal" command described below for true categorical variables.
-**** "censored" is an optional argument that identifies a list of variables
-* that should be treated as censored by Mplus.
+**** "censored" is an optional string argument that identifies the code that
+* should be used to define censored variables in Mplus. The string should
+* identify both the censored variables as well as which part of the distribution
+* is censored.
 **** "count" is an optional argument that identifies a list of variables 
 * that should be treated as count variables (i.e., for Poisson regression)
 * by Mplus.
@@ -264,7 +266,7 @@ loCO = COint + b1*12;
 medCO = COint + b1*14;
 hiCO = COint + b1*16;""",
 categorical = ["yrs_tch"],
-censored = None,
+censored = "IS (b)",
 count = None,
 nominal = ["Tx", "gender"],
 cluster = "school",
@@ -296,7 +298,8 @@ waittime = 10)
 * Educ does not have any influence on any of the three outcomes (CO, ES, IS).
 * A estimates are being made of the value of CO when eduction is low
 * (12 years), medium (14 years), or high (16 years).
-* Yrs_tch is treated as a categorical variable, 
+* Yrs_tch is treated as a categorical variable, IS is
+* treated as a bottom-censored variable,
 * whereas Tx and gender are treated as nominal variables. 
 * The model also controls for school as a random 
 * clustering factor. The analysis weights the observations using the 
@@ -359,6 +362,18 @@ def MplusSplit(splitstring, linelength):
         curline = curline[splitloc:]
     returnstring += curline
     return returnstring
+
+def replaceOutsideParentheses(text, search, replace):
+    # Pattern to match text inside and outside parentheses
+    pattern = r'(\([^)]*\))|([^()]*)'
+
+    def replacement(match):
+        if match.group(1):  # Keep text inside parentheses unchanged
+            return match.group(1)
+        else:  # Apply replacement outside parentheses
+            return re.sub(search, replace, match.group(2))
+
+    return re.sub(pattern, replacement, text)
 
 def SPSSspaceSplit(splitstring, linelength):
     stringwords = splitstring.split()
@@ -628,13 +643,17 @@ class MplusPAprogram:
         if grouping is not None:
             self.variable += ";\n\ngrouping is " + grouping
 
-        vartypeList = [categorical, censored, count, nominal]
-        varnameList = ["categorical", "censored", "count", "nominal"]
+        vartypeList = [categorical, count, nominal]
+        varnameList = ["categorical", "count", "nominal"]
         for t in range(len(vartypeList)):
             if vartypeList[t]:
                 self.variable += ";\n\n{0} = ".format(varnameList[t])
                 for var in vartypeList[t]:
                     self.variable += var + "\n"
+                    
+        if censored:
+            self.variable += ";\n\ncensored "+censored+"\n"                   
+        
         self.variable += ";\n\nMISSING ARE ALL (-999);"
 
     def setAnalysis(self, xwith, cluster, weight, estimator, starts,
@@ -2151,7 +2170,7 @@ def MplusPathAnalysis(modellabel="MplusPathAnalysis", inpfile="Mplus/model.inp",
             MplusGrouping += " " + grouping_val
         
         # Convert variable list arguments to Mplus
-        lvarList = [means, auxiliary, categorical, censored, count, nominal]
+        lvarList = [means, auxiliary, categorical, count, nominal]
         MplusMeans = []
         MplusAuxiliary = []
         MplusCategorical = []
@@ -2170,7 +2189,17 @@ def MplusPathAnalysis(modellabel="MplusPathAnalysis", inpfile="Mplus/model.inp",
                     for s, m in zip(SPSSvariablesCaps, MplusVariables):
                         if lvarMplusList[t][i] == s:
                             lvarMplusList[t][i] = m
-        
+
+        # Convert censored to Mplus
+        if censored is None:
+            MplusCensored = None
+        else:
+            # start by converting censored to upper case
+            MplusCensored =  replaceOutsideParentheses(censored, r"[a-z]", lambda m: m.group().upper())
+            # then replace SPSS variables with Mplus variables
+            for s, m in zip(SPSSvariablesCaps, MplusVariables):
+                MplusCensored = replaceOutsideParentheses(MplusCensored, s, m)
+                        
         # Convert weight variable to Mplus
         if weight is None:
             MplusWeight = None
@@ -2379,5 +2408,6 @@ categorical, censored, count, nominal
 * 2024-11-12 Corrected parenthesis error in MI
 * 2024-11-13 Set Estimator in getNewParam to default to ML
 * 2024-11-13a Added inpShow argument
+* 2025-02-23 Corrected censored
 
-COMMENT BOOKMARK;LINE_NUM=977;ID=1.
+COMMENT BOOKMARK;LINE_NUM=996;ID=1.
