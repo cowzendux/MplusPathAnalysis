@@ -8,11 +8,12 @@
 * that will perform the path analysis in Mplus, then loads the important
 * parts of the Mplus output into the SPSS output window.
 
-**** Usage: MplusPathAnalysis(modellabel, inpfile, inpShow, runModel, viewOutput, suppressSPSS,
+**** Usage: MplusPathAnalysis(modellabel, inpfile, inpShow, runModel, viewOutput, 
+MIdata, MIvars, suppressSPSS,
 latent, latentFixed, latentIdentifiers, model, xwith, means, covar, covEndo, covExo, estimator, starts,
 useobservations, subpopulation, indirect, identifiers, meanIdentifiers, covIdentifiers,
 wald, constraint, montecarlo, bootstrap, repse,
-categorical, censored, count, nominal, idvariable, cluster, grouping, weight, 
+categorical, censored, count, nominal, idvariable, cluster, grouping, weight, auxiliary,
 datasetName, datasetIntercepts, indDatasetName, newDatasetName,
 datasetLabels, miThreshold,
 savedata, saveFscores, processors, waittime)
@@ -38,6 +39,15 @@ savedata, saveFscores, processors, waittime)
 * you do not want to tie up SPSS while you are waiting for Mplus to finish. If you 
 * choose not to view the output, then the program will also not create a dataset 
 * for the coefficients. By default, the output is read into SPSS.
+**** "MIdata" is an optional argument indicating the name of an imputation list file 
+* that indexes the different data sets to be used through multiple imputation. This 
+* macro will not create MI data sets. However, if you previously created the MI 
+* data sets using a different program, identifying the file in this argument allows you
+* to analyze the MI data sets using this macro. 
+**** "MIvars" is a string argument providing the list of variables contained in a 
+* set of multiple imputation data set. The order of variables in the string must
+* match the order of the variables in the data set. If MIdata = None, this argument
+* does not do anything.
 **** "suppressSPSS" is a boolean argument indicating whether or not you want
 * the program to supress SPSS output while running the model. Typically this
 * output is not useful and merely clogs up the output window. However, if your
@@ -320,6 +330,9 @@ begin program python3.
 import spss, spssaux, os, sys, time, re, tempfile, SpssClient
 from subprocess import Popen, PIPE
 
+def stringToCapList(text):
+    return [word.upper() for word in re.split(r'\s+', text.strip()) if word]
+
 def _titleToPane():
     """See titleToPane(). This function does the actual job"""
     outputDoc = SpssClient.GetDesignatedOutputDoc()
@@ -588,12 +601,14 @@ class MplusPAprogram:
     def setTitle(self, titleText):
         self.title += titleText
 
-    def setData(self, filename):
+    def setData(self, filename, MIdata):
         self.data += "File is\n"
         splitName = MplusSplit(filename, 75)
         self.data += "'" + splitName + "';"
+        if MIdata != None:
+            self.data += "\nType is imputation;"
 
-    def setVariablePA(self, fullList, latent, model, xwith, useobservations, subpopulation,
+    def setVariablePA(self, fullList, MIdata, latent, model, xwith, useobservations, subpopulation,
                       categorical, censored, count, nominal, idvariable, cluster, weight, auxiliary, grouping):
         self.variable += "Names are\n"
         for var in fullList:
@@ -637,7 +652,7 @@ class MplusPAprogram:
         if weight is not None:
             self.variable += ";\n\nweight is " + weight
         if auxiliary:
-            self.variable += ";\n\nauxiliary = (m) "
+            self.variable += ";\n\nauxiliary = (m)"
             for var in auxiliary:
                 self.variable += var + "\n"
         if grouping is not None:
@@ -654,7 +669,10 @@ class MplusPAprogram:
         if censored:
             self.variable += ";\n\ncensored "+censored+"\n"                   
         
-        self.variable += ";\n\nMISSING ARE ALL (-999);"
+        if MIdata == None:
+            self.variable += ";\n\nMISSING ARE ALL (-999);"
+        else:
+            self.variable += ";\n\nMISSING IS *;"
 
     def setAnalysis(self, xwith, cluster, weight, estimator, starts,
                     mc, boot, repse, processors):
@@ -672,6 +690,7 @@ class MplusPAprogram:
         if starts is not None:
             self.analysis += "\nstarts = {0};".format(starts)
         if mc is not None:
+            self.analysis += "\nALGORITHM = INTEGRATION;"
             self.analysis += "\nintegration = montecarlo({0});".format(mc)
         if boot is not None:
             self.analysis += "\nbootstrap = {0};".format(boot)
@@ -1621,22 +1640,22 @@ class MplusPAoutput:
             datasetObj.varlist.append("Outcome", 50)
             datasetObj.varlist.append("Predictor", 50)
             if estimator == "BAYES":
-                datasetObj.varlist.append("b_Coefficient", 0)
+                datasetObj.varlist.append("b", 0)
                 datasetObj.varlist.append("b_PostSD", 0)
                 datasetObj.varlist.append("b_p", 0)
                 datasetObj.varlist.append("b_lower", 0)
                 datasetObj.varlist.append("b_upper", 0)
-                datasetObj.varlist.append("beta_Coefficient", 0)
+                datasetObj.varlist.append("beta", 0)
                 datasetObj.varlist.append("beta_PostSD", 0)
                 datasetObj.varlist.append("beta_p", 0)
                 datasetObj.varlist.append("beta_lower", 0)
                 datasetObj.varlist.append("beta_upper", 0)
             else:
-                datasetObj.varlist.append("b_Coefficient", 0)
+                datasetObj.varlist.append("b", 0)
                 datasetObj.varlist.append("b_SE", 0)
                 datasetObj.varlist.append("b_Ratio", 0)
                 datasetObj.varlist.append("b_p", 0)
-                datasetObj.varlist.append("beta_Coefficient", 0)
+                datasetObj.varlist.append("beta", 0)
                 datasetObj.varlist.append("beta_SE", 0)
                 datasetObj.varlist.append("beta_Ratio", 0)
                 datasetObj.varlist.append("beta_p", 0)
@@ -1660,9 +1679,9 @@ class MplusPAoutput:
     
         # Set variables to f8.3
         if estimator == "BAYES":
-            submitstring = "alter type b_Coefficient to beta_upper (f8.3)."
+            submitstring = "alter type b to beta_upper (f8.3)."
         else:
-            submitstring = "alter type b_Coefficient to beta_p (f8.3)."
+            submitstring = "alter type b to beta_p (f8.3)."
         spss.Submit(submitstring)
     
         # Get intercepts
@@ -1718,22 +1737,22 @@ class MplusPAoutput:
             datasetObj.varlist.append("Path", 200)
             datasetObj.varlist.append("SpecificEffect", 0)
             if estimator == "BAYES":
-                datasetObj.varlist.append("b_Coefficient", 0)
+                datasetObj.varlist.append("b", 0)
                 datasetObj.varlist.append("b_PostSD", 0)
                 datasetObj.varlist.append("b_p", 0)
                 datasetObj.varlist.append("b_lower", 0)
                 datasetObj.varlist.append("b_upper", 0)
-                datasetObj.varlist.append("beta_Coefficient", 0)
+                datasetObj.varlist.append("beta", 0)
                 datasetObj.varlist.append("beta_PostSD", 0)
                 datasetObj.varlist.append("beta_p", 0)
                 datasetObj.varlist.append("beta_lower", 0)
                 datasetObj.varlist.append("beta_upper", 0)
             else:
-                datasetObj.varlist.append("b_Coefficient", 0)
+                datasetObj.varlist.append("b", 0)
                 datasetObj.varlist.append("b_SE", 0)
                 datasetObj.varlist.append("b_Ratio", 0)
                 datasetObj.varlist.append("b_p", 0)
-                datasetObj.varlist.append("beta_Coefficient", 0)
+                datasetObj.varlist.append("beta", 0)
                 datasetObj.varlist.append("beta_SE", 0)
                 datasetObj.varlist.append("beta_Ratio", 0)
                 datasetObj.varlist.append("beta_p", 0)
@@ -1756,7 +1775,7 @@ class MplusPAoutput:
         spss.EndDataStep()
     
         # Set types for numeric vars
-        submitstring = """alter type b_Coefficient to beta_p (f8.3).
+        submitstring = """alter type b to beta_p (f8.3).
     alter type SpecificEffect (f8.0)."""
         spss.Submit(submitstring)
     
@@ -1858,7 +1877,8 @@ class MplusPAoutput:
         spss.EndDataStep()
     
 def MplusPathAnalysis(modellabel="MplusPathAnalysis", inpfile="Mplus/model.inp", inpShow=False, 
-                      runModel=True, viewOutput=True, suppressSPSS=False, 
+                      runModel=True, viewOutput=True, 
+                      MIdata = None, MIvars = None, suppressSPSS=False, 
                       latent=None, latentFixed=None, latentIdentifiers=None,
                       model=None, xwith=None, means=None,
                       covar=None, covEndo=False, covExo=True, estimator=None,
@@ -1888,12 +1908,16 @@ def MplusPathAnalysis(modellabel="MplusPathAnalysis", inpfile="Mplus/model.inp",
     fname, fext = os.path.splitext(os.path.basename(inpfile))
 
     # Obtain list of variables in data set
-    SPSSvariables = []
-    SPSSvariablesCaps = []
-    for varnum in range(spss.GetVariableCount()):
-        SPSSvariables.append(spss.GetVariableName(varnum))
-        SPSSvariablesCaps.append(spss.GetVariableName(varnum).upper())
-
+    if (MIdata != None):
+        SPSSvariables = stringToCapList(MIvars)
+        SPSSvariablesCaps = SPSSvariables
+    else:
+        SPSSvariables = []
+        SPSSvariablesCaps = []
+        for varnum in range(spss.GetVariableCount()):
+            SPSSvariables.append(spss.GetVariableName(varnum))
+            SPSSvariablesCaps.append(spss.GetVariableName(varnum).upper())
+            
     # Restore output
     if suppressSPSS:
         submitstring = """OMSEND TAG = 'NoJunk'."""
@@ -1978,8 +2002,12 @@ def MplusPathAnalysis(modellabel="MplusPathAnalysis", inpfile="Mplus/model.inp",
             spss.Submit(submitstring)
     
         # Export data
-        dataname = os.path.join(outdir, fname + ".dat")
-        MplusVariables = exportMplus(dataname)
+        if MIdata == None:
+            dataname = outdir + fname + ".dat"
+            MplusVariables = exportMplus(dataname)
+        else:
+            dataname = MIdata
+            MplusVariables = SPSSvariablesCaps        
     
         # Define latent variables using Mplus variables
         if latent is None:
@@ -2211,8 +2239,8 @@ def MplusPathAnalysis(modellabel="MplusPathAnalysis", inpfile="Mplus/model.inp",
         # Create input program
         pathProgram = MplusPAprogram()
         pathProgram.setTitle("Created by MplusPathAnalysis")
-        pathProgram.setData(dataname)
-        pathProgram.setVariablePA(MplusVariables, MplusLatent, MplusModel, 
+        pathProgram.setData(dataname, MIdata)
+        pathProgram.setVariablePA(MplusVariables, MIdata, MplusLatent, MplusModel, 
                                   MplusXwith, MplusUseobservations, MplusSubpopulation,
                                   MplusCategorical, MplusCensored, MplusCount, MplusNominal, MplusIdvariable,
                                   MplusCluster, MplusWeight, MplusAuxiliary, MplusGrouping)
@@ -2409,5 +2437,8 @@ categorical, censored, count, nominal
 * 2024-11-13 Set Estimator in getNewParam to default to ML
 * 2024-11-13a Added inpShow argument
 * 2025-02-23 Corrected censored
-
-COMMENT BOOKMARK;LINE_NUM=996;ID=1.
+* 2025-03-17 Removed _Coefficient from saved b and beta
+* 2025-04-28 Changed auxiliary implementation
+*    Added algorithm=integration when montecarlo is not none
+* 2025-05-08 Added MIdata and MIvars
+COMMENT BOOKMARK;LINE_NUM=1015;ID=1.
